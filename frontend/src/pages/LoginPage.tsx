@@ -1,3 +1,3 @@
 export default function LoginPage() {
-  return <h1 className="text-2xl font-semibold">Connexion</h1>
+  return <h1 className="text-2xl font-semibold">Connexion</h1>;
 }
