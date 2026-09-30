@@ -5,10 +5,12 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module.js';
 import { CurrentUser } from '../src/common/decorators/current-user.decorator.js';
+import { Roles } from '../src/common/decorators/roles.decorator.js';
 import {
   type AuthUser,
   JwtAuthGuard,
 } from '../src/common/guards/jwt-auth.guard.js';
+import { RolesGuard } from '../src/common/guards/roles.guard.js';
 import { Role } from '../src/generated/prisma/enums.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
@@ -19,6 +21,13 @@ class DemoController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: AuthUser) {
     return user;
+  }
+
+  @Get('organizers')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ORGANIZER)
+  organizers() {
+    return { ok: true };
   }
 }
 
@@ -67,5 +76,15 @@ describe('Auth guards (e2e)', () => {
     const token = await jwt.signAsync({ sub: 'u1', role: Role.PARTICIPANT });
     const { body } = await get('me', token).expect(200);
     expect(body).toEqual({ id: 'u1', role: Role.PARTICIPANT });
+  });
+
+  it('returns 403 when the role is not allowed', async () => {
+    const token = await jwt.signAsync({ sub: 'u1', role: Role.PARTICIPANT });
+    await get('organizers', token).expect(403);
+  });
+
+  it('lets an allowed role through', async () => {
+    const token = await jwt.signAsync({ sub: 'u1', role: Role.ORGANIZER });
+    await get('organizers', token).expect(200);
   });
 });
