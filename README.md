@@ -20,6 +20,7 @@ Le détail fonctionnel est dans [PROJECT.md](PROJECT.md).
 
 ```bash
 npm run setup   # une seule fois : dépendances, backend/.env, Postgres, migrations
+npm run env     # La première fois ou si .env.example a été modifié
 npm run dev     # Postgres + API + front dans un seul terminal (Ctrl+C arrête tout)
 ```
 
