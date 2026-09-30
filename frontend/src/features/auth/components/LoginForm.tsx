@@ -2,17 +2,17 @@ import { useState } from 'react';
 import type { SyntheticEvent } from 'react';
 import { Link } from 'react-router';
 import TextField from '../../../components/TextField.tsx';
-import { login } from '../api.ts';
 import { useSubmit } from '../hooks/useSubmit.ts';
-import { saveSession } from '../session.ts';
+import { useAuth } from '../useAuth.ts';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { submit, pending, error } = useSubmit(async () => {
-    // LoginPage redirects home as soon as the session exists
-    saveSession(await login({ email, password }));
-  });
+  const { login } = useAuth();
+  // LoginPage redirects home as soon as the session exists
+  const { submit, pending, error } = useSubmit(() =>
+    login({ email, password }),
+  );
 
   function onSubmit(event: SyntheticEvent) {
     event.preventDefault();
