@@ -20,3 +20,9 @@ coverage/
 # IDE
 .idea
 .vscode
+
+# claude (local only)
+.claude/settings.local.json
+CLAUDE.local.md
+.claude-mem/
+graphify-out/

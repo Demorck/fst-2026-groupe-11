@@ -1,0 +1,3 @@
+# Claude config and third-party skill docs are not application code
+.claude/
+skills-lock.json
