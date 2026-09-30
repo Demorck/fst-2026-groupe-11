@@ -23,6 +23,13 @@ class EnvironmentVariables {
   @IsString()
   DATABASE_URL: string;
 
+  @IsString()
+  JWT_SECRET: string;
+
+  @IsInt()
+  @Min(1)
+  JWT_EXPIRES_IN_SECONDS: number;
+
   @IsOptional()
   @IsIn(['mock'])
   LLM_PROVIDER?: string;

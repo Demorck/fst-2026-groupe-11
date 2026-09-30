@@ -1,6 +1,9 @@
 import { NavLink, Outlet } from 'react-router';
+import { useSession } from '../features/auth/session.ts';
 
 export default function RootLayout() {
+  const session = useSession();
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <header className="border-b bg-white">
@@ -9,9 +12,15 @@ export default function RootLayout() {
             G-Event
           </NavLink>
           <NavLink to="/dashboard">Dashboard</NavLink>
-          <NavLink to="/login" className="ml-auto">
-            Connexion
-          </NavLink>
+          {session ? (
+            <NavLink to="/profile" className="ml-auto">
+              {session.user.name}
+            </NavLink>
+          ) : (
+            <NavLink to="/login" className="ml-auto">
+              Connexion
+            </NavLink>
+          )}
         </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">

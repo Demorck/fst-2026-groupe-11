@@ -26,3 +26,4 @@ coverage/
 CLAUDE.local.md
 .claude-mem/
 graphify-out/
+.gitattributes
