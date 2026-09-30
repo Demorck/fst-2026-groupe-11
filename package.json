@@ -13,7 +13,7 @@
     "build": "npm run build --prefix backend && npm run build --prefix frontend",
     "lint": "npm run lint --prefix backend && npm run lint --prefix frontend",
     "format": "npm run format --prefix backend && prettier --write frontend/src",
-    "test": "npm test --prefix backend"
+    "test": "npm test --prefix backend && npm test --prefix frontend"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
