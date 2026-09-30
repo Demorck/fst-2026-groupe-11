@@ -9,6 +9,16 @@ export function saveSession(session: LoginResponse) {
   listeners.forEach((notify) => notify());
 }
 
+export function clearSession() {
+  localStorage.removeItem(KEY);
+  listeners.forEach((notify) => notify());
+}
+
+export function getToken(): string | undefined {
+  const raw = localStorage.getItem(KEY);
+  return raw ? (JSON.parse(raw) as LoginResponse).accessToken : undefined;
+}
+
 function subscribe(notify: () => void) {
   listeners.add(notify);
   // also follow logins and logouts made in another tab
