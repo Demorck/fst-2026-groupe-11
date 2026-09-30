@@ -48,6 +48,7 @@ model Event {
   organizerId String
   organizer   User          @relation(fields: [organizerId], references: [id])
   tickets     Ticket[]
+  shifts      Shift[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -74,4 +75,18 @@ model Ticket {
   // One row per participant/event pair: cancel = CANCELLED, rebook = reactivate the row.
   @@unique([eventId, participantId])
   @@index([participantId])
+}
+
+model Shift {
+  id                 String   @id @default(uuid())
+  title              String
+  startsAt           DateTime
+  endsAt             DateTime
+  requiredVolunteers Int
+  eventId            String
+  event              Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([eventId])
 }
