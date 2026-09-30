@@ -15,11 +15,63 @@ enum Role {
   PARTICIPANT
 }
 
+enum EventCategory {
+  CONFERENCE
+  PARTY
+  SPORT
+  CULTURE
+  WORKSHOP
+  OTHER
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
   name      String
   role      Role     @default(PARTICIPANT)
+  events    Event[]
+  tickets   Ticket[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Event {
+  id          String        @id @default(uuid())
+  title       String
+  description String
+  startsAt    DateTime
+  endsAt      DateTime
+  location    String
+  capacity    Int
+  category    EventCategory
+  imageUrl    String?
+  organizerId String
+  organizer   User          @relation(fields: [organizerId], references: [id])
+  tickets     Ticket[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([organizerId])
+}
+
+enum TicketStatus {
+  RESERVED
+  CANCELLED
+}
+
+model Ticket {
+  id            String       @id @default(uuid())
+  code          String       @unique
+  status        TicketStatus @default(RESERVED)
+  checkedInAt   DateTime?
+  participantId String
+  participant   User         @relation(fields: [participantId], references: [id])
+  eventId       String
+  event         Event        @relation(fields: [eventId], references: [id])
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // One row per participant/event pair: cancel = CANCELLED, rebook = reactivate the row.
+  @@unique([eventId, participantId])
+  @@index([participantId])
 }
