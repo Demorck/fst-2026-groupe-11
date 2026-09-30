@@ -47,15 +47,26 @@ describe('AuthService', () => {
   describe('login', () => {
     const credentials = { email: dto.email, password: dto.password };
 
-    it('returns a token carrying the user id and role', async () => {
+    it('returns a token carrying the user id and role, and the public user', async () => {
       const passwordHash = await argon2.hash(dto.password);
-      const findUnique = vi
-        .fn()
-        .mockResolvedValue({ id: 'u1', role: Role.ORGANIZER, passwordHash });
+      const findUnique = vi.fn().mockResolvedValue({
+        id: 'u1',
+        name: dto.name,
+        role: Role.ORGANIZER,
+        passwordHash,
+      });
 
       const result = await (await build({ findUnique })).login(credentials);
 
-      expect(result).toEqual({ accessToken: 'token' });
+      expect(result).toEqual({
+        accessToken: 'token',
+        user: {
+          id: 'u1',
+          email: dto.email,
+          name: dto.name,
+          role: Role.ORGANIZER,
+        },
+      });
       expect(signAsync).toHaveBeenCalledWith({
         sub: 'u1',
         role: Role.ORGANIZER,

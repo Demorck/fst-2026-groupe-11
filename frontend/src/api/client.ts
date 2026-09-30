@@ -11,7 +11,12 @@ export async function apiFetch<T>(
     headers: { 'Content-Type': 'application/json', ...init?.headers },
   });
   if (!res.ok) {
-    throw new Error(`API ${res.status} on ${path}`);
+    // Nest sends `message` as a string, or as a list for validation errors
+    const body = (await res.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const message = [body?.message ?? []].flat().join(', ');
+    throw new Error(message || `API ${res.status} on ${path}`);
   }
   return res.json() as Promise<T>;
 }

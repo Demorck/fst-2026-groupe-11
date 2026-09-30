@@ -46,6 +46,7 @@ export class AuthService {
       sub: user.id,
       role: user.role,
     });
-    return { accessToken };
+    const { id, name, role } = user;
+    return { accessToken, user: { id, email, name, role } };
   }
 }
