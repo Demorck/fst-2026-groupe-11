@@ -25,15 +25,16 @@ enum EventCategory {
 }
 
 model User {
-  id               String            @id @default(uuid())
-  email            String            @unique
-  name             String
-  role             Role              @default(PARTICIPANT)
-  events           Event[]
-  tickets          Ticket[]
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  passwordHash String
+  role      Role     @default(PARTICIPANT)
   shiftAssignments ShiftAssignment[]
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  events    Event[]
+  tickets   Ticket[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Event {
@@ -49,7 +50,6 @@ model Event {
   organizerId String
   organizer   User          @relation(fields: [organizerId], references: [id])
   tickets     Ticket[]
-  shifts      Shift[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
