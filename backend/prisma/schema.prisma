@@ -50,6 +50,7 @@ model Event {
   organizerId String
   organizer   User          @relation(fields: [organizerId], references: [id])
   tickets     Ticket[]
+  shifts      Shift[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
