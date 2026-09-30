@@ -25,14 +25,15 @@ enum EventCategory {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String
-  role      Role     @default(PARTICIPANT)
-  events    Event[]
-  tickets   Ticket[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String            @id @default(uuid())
+  email            String            @unique
+  name             String
+  role             Role              @default(PARTICIPANT)
+  events           Event[]
+  tickets          Ticket[]
+  shiftAssignments ShiftAssignment[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 }
 
 model Event {
@@ -48,6 +49,7 @@ model Event {
   organizerId String
   organizer   User          @relation(fields: [organizerId], references: [id])
   tickets     Ticket[]
+  shifts      Shift[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -74,4 +76,33 @@ model Ticket {
   // One row per participant/event pair: cancel = CANCELLED, rebook = reactivate the row.
   @@unique([eventId, participantId])
   @@index([participantId])
+}
+
+model Shift {
+  id                 String            @id @default(uuid())
+  title              String
+  startsAt           DateTime
+  endsAt             DateTime
+  requiredVolunteers Int
+  eventId            String
+  event              Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignments        ShiftAssignment[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([eventId])
+}
+
+// Volunteer sign-up for a shift; volunteer is a User with role VOLUNTEER (enforced by the service).
+model ShiftAssignment {
+  id          String   @id @default(uuid())
+  shiftId     String
+  shift       Shift    @relation(fields: [shiftId], references: [id])
+  volunteerId String
+  volunteer   User     @relation(fields: [volunteerId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([shiftId, volunteerId])
+  @@index([volunteerId])
 }
