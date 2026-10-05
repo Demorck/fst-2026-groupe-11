@@ -5,7 +5,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { Role } from '../../generated/prisma/enums.js';
+import type { Role } from '@/generated/prisma/enums.js';
 import { ROLES_KEY } from '../decorators/roles.decorator.js';
 import type { AuthenticatedRequest } from './jwt-auth.guard.js';
 

@@ -17,6 +17,7 @@ async function bootstrap() {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('G-Event API')
     .setVersion('0.0.1')
+    .addBearerAuth()
     .build();
   SwaggerModule.setup(
     'api/docs',

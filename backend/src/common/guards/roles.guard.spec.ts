@@ -1,7 +1,7 @@
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Roles } from '../decorators/roles.decorator.js';
-import { Role } from '../../generated/prisma/enums.js';
+import { Role } from '@/generated/prisma/enums.js';
 import { RolesGuard } from './roles.guard.js';
 
 class Restricted {
