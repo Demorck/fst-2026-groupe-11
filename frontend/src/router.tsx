@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router';
+import RequireAuth from './features/auth/components/RequireAuth.tsx';
 import RootLayout from './layouts/RootLayout.tsx';
 import CheckinPage from './pages/CheckinPage.tsx';
 import CreateEventPage from './pages/CreateEventPage.tsx';
@@ -19,11 +20,21 @@ export const router = createBrowserRouter([
       { index: true, element: <EventsPage /> },
       { path: 'login', element: <LoginPage /> },
       { path: 'register', element: <RegisterPage /> },
-      { path: 'events/new', element: <CreateEventPage /> },
       { path: 'events/:eventId', element: <EventDetailPage /> },
-      { path: 'events/:eventId/shifts', element: <VolunteerShiftsPage /> },
-      { path: 'events/:eventId/checkin', element: <CheckinPage /> },
-      { path: 'dashboard', element: <DashboardPage /> },
+      {
+        element: <RequireAuth roles={['ORGANIZER']} />,
+        children: [
+          { path: 'events/new', element: <CreateEventPage /> },
+          { path: 'events/:eventId/checkin', element: <CheckinPage /> },
+          { path: 'dashboard', element: <DashboardPage /> },
+        ],
+      },
+      {
+        element: <RequireAuth roles={['VOLUNTEER', 'ORGANIZER']} />,
+        children: [
+          { path: 'events/:eventId/shifts', element: <VolunteerShiftsPage /> },
+        ],
+      },
       { path: 'health', element: <HealthPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],

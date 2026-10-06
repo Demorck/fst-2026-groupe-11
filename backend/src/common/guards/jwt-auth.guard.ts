@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
-import type { Role } from '../../generated/prisma/enums.js';
+import type { Role } from '@/generated/prisma/enums.js';
 
 export interface AuthUser {
   id: string;
