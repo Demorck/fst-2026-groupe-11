@@ -33,6 +33,7 @@ model User {
   shiftAssignments ShiftAssignment[]
   events    Event[]
   tickets   Ticket[]
+  memberships OrganizationMember[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -51,6 +52,8 @@ model Event {
   organizer   User          @relation(fields: [organizerId], references: [id])
   tickets     Ticket[]
   shifts      Shift[]
+  // At least one organization manages an event (enforced by the service, a table constraint cannot count)
+  organizations EventOrganization[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -106,4 +109,57 @@ model ShiftAssignment {
 
   @@unique([shiftId, volunteerId])
   @@index([volunteerId])
+}
+
+enum OrganizationRole {
+  MANAGER
+  VOLUNTEER
+}
+
+enum MembershipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+model Organization {
+  id              String               @id @default(uuid())
+  name            String               @unique
+  description     String?
+  // Logo stored in the database; always `omit` it from list queries, it can weigh 512 KB
+  logo            Bytes?
+  logoContentType String?
+  members         OrganizationMember[]
+  events          EventOrganization[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+}
+
+// Membership and invitation in one row: PENDING until the invited user accepts.
+// A declined invitation keeps its row, so inviting again resets it to PENDING.
+model OrganizationMember {
+  id             String           @id @default(uuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation(fields: [userId], references: [id])
+  role           OrganizationRole
+  status         MembershipStatus @default(PENDING)
+  invitedById    String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+model EventOrganization {
+  eventId        String
+  event          Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@id([eventId, organizationId])
+  @@index([organizationId])
 }
