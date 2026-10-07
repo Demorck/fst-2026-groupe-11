@@ -34,6 +34,8 @@ model User {
   events    Event[]
   tickets   Ticket[]
   memberships OrganizationMember[]
+  auditActions OrganizationAuditLog[] @relation("AuditActor")
+  auditTargets OrganizationAuditLog[] @relation("AuditTarget")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -120,6 +122,18 @@ enum MembershipStatus {
   PENDING
   ACCEPTED
   DECLINED
+  // Invitation withdrawn by a manager
+  CANCELLED
+  // Member removed by a manager, or who left: the row stays for the history (hours, attestation)
+  REMOVED
+  LEFT
+}
+
+enum OrganizationAction {
+  INVITATION_CANCELLED
+  MEMBER_REMOVED
+  MEMBER_LEFT
+  PARTICIPATION_REMOVED
 }
 
 model Organization {
@@ -131,6 +145,7 @@ model Organization {
   logoContentType String?
   members         OrganizationMember[]
   events          EventOrganization[]
+  auditLog        OrganizationAuditLog[]
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 }
@@ -146,6 +161,8 @@ model OrganizationMember {
   role           OrganizationRole
   status         MembershipStatus @default(PENDING)
   invitedById    String?
+  // Reset at every (re)invitation: a PENDING invitation older than 7 days is expired, computed on read
+  invitedAt      DateTime         @default(now())
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
@@ -162,4 +179,22 @@ model EventOrganization {
 
   @@id([eventId, organizationId])
   @@index([organizationId])
+}
+
+// Who did what in an organization: removals and cancelled invitations. Never edited or deleted.
+model OrganizationAuditLog {
+  id             String             @id @default(uuid())
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  action         OrganizationAction
+  actorId        String
+  actor          User               @relation("AuditActor", fields: [actorId], references: [id])
+  targetUserId   String?
+  targetUser     User?              @relation("AuditTarget", fields: [targetUserId], references: [id])
+  // Plain id, no relation: the entry outlives a deleted event
+  eventId        String?
+  details        Json?
+  createdAt      DateTime           @default(now())
+
+  @@index([organizationId, createdAt])
 }
