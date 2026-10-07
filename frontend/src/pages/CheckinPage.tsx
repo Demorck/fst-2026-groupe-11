@@ -5,11 +5,14 @@ export default function CheckinPage() {
   const { eventId = '' } = useParams();
 
   return (
-    <div className="space-y-4">
-      <Link to={`/events/${eventId}`} className="underline">
-        Retour à l'événement
+    <div className="mx-auto flex max-w-3xl flex-col gap-5">
+      <Link
+        to={`/events/${eventId}`}
+        className="inline-flex min-h-11 items-center self-start text-sm"
+      >
+        ← Retour à l'événement
       </Link>
-      <h1 className="text-2xl font-semibold">Check-in</h1>
+      <h1 className="page-title">Check-in</h1>
       <CheckinList eventId={eventId} />
     </div>
   );

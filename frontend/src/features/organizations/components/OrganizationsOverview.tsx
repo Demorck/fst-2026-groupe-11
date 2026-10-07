@@ -16,9 +16,6 @@ import { ROLE_LABELS } from '../types.ts';
 import type { Invitation, MyOrganization } from '../types.ts';
 import OrganizationLogo from './OrganizationLogo.tsx';
 
-const buttonClass =
-  'rounded-lg px-3 py-1.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60';
-
 function CreateOrganizationForm() {
   const navigate = useNavigate();
   const [name, setName] = useState('');
@@ -37,10 +34,7 @@ function CreateOrganizationForm() {
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="max-w-xl space-y-4 rounded-xl border border-gray-200 bg-white p-6"
-    >
+    <form onSubmit={onSubmit} className="max-w-xl space-y-4 card p-6">
       <h2 className="text-xl font-semibold">Créer une organisation</h2>
       <TextField
         label="Nom"
@@ -56,14 +50,14 @@ function CreateOrganizationForm() {
         onChange={(e) => setDescription(e.target.value)}
       />
       {error && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="alert-error">
           {translate(error)}
         </p>
       )}
       <button
         type="submit"
         disabled={pending}
-        className={`${buttonClass} bg-indigo-600 text-white`}
+        className="btn btn-primary text-sm"
       >
         {pending ? 'Création...' : "Créer l'organisation"}
       </button>
@@ -108,7 +102,7 @@ export default function OrganizationsOverview() {
   return (
     <div className="space-y-8">
       {error && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="alert-error">
           {error}
         </p>
       )}
@@ -122,7 +116,7 @@ export default function OrganizationsOverview() {
             {invitations.map(({ id, role, organization }) => (
               <li
                 key={id}
-                className="flex flex-wrap items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 p-4"
+                className="flex flex-wrap items-center gap-3 rounded-xl border border-brand-edge bg-brand-tint/50 p-4"
               >
                 <OrganizationLogo organization={organization} />
                 <span className="flex-1">
@@ -133,7 +127,7 @@ export default function OrganizationsOverview() {
                   type="button"
                   onClick={() => void answer(id, 'accept')}
                   aria-label={`Accepter l'invitation de ${organization.name}`}
-                  className={`${buttonClass} bg-indigo-600 text-white`}
+                  className="btn btn-primary text-sm"
                 >
                   Accepter
                 </button>
@@ -141,7 +135,7 @@ export default function OrganizationsOverview() {
                   type="button"
                   onClick={() => void answer(id, 'decline')}
                   aria-label={`Refuser l'invitation de ${organization.name}`}
-                  className={`${buttonClass} border border-gray-300 bg-white`}
+                  className={`btn btn-secondary text-sm`}
                 >
                   Refuser
                 </button>
@@ -163,7 +157,7 @@ export default function OrganizationsOverview() {
           {organizations?.map((organization) => (
             <li
               key={organization.id}
-              className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4"
+              className="flex items-center gap-3 card p-4"
             >
               <OrganizationLogo
                 organization={organization}
@@ -171,11 +165,11 @@ export default function OrganizationsOverview() {
               />
               <Link
                 to={`/organizations/${organization.id}/manage`}
-                className="flex-1 font-semibold text-indigo-700 hover:underline"
+                className="flex-1 font-semibold hover:underline"
               >
                 {organization.name}
               </Link>
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-muted">
                 {ROLE_LABELS[organization.role]}
               </span>
             </li>

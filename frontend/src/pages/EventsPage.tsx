@@ -29,27 +29,43 @@ function EventsList({ organizationId }: { organizationId?: string }) {
     .find(({ id }) => id === organizationId);
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Événements à venir</h1>
+    <div className="space-y-7">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="page-title">Événements à venir</h1>
+          <p className="page-subtitle">
+            Réservez votre place aux événements des associations du campus.
+          </p>
+        </div>
+        {events && (
+          <span className="text-sm text-muted">
+            {events.length} événement(s)
+          </span>
+        )}
+      </div>
       {organizationId && (
-        <p className="flex items-center gap-2 text-sm">
-          <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700">
+        <p className="flex flex-wrap items-center gap-3 text-sm">
+          <span className="badge badge-brand px-3 py-1 text-sm">
             Organisation : {organization?.name ?? '...'}
           </span>
           <Link
             to="/"
             aria-label="Retirer le filtre par organisation"
-            className="text-gray-600 underline"
+            className="inline-flex min-h-11 items-center text-muted underline"
           >
             ✕ Tous les événements
           </Link>
         </p>
       )}
-      {error && <p className="text-red-600">Erreur : {error}</p>}
-      {!error && !events && <p>Chargement...</p>}
-      {events?.length === 0 && <p>Aucun événement à venir pour le moment.</p>}
+      {error && <p className="alert-error">Erreur : {error}</p>}
+      {!error && !events && <p className="text-muted">Chargement...</p>}
+      {events?.length === 0 && (
+        <p className="card text-muted">
+          Aucun événement à venir pour le moment.
+        </p>
+      )}
       {events && events.length > 0 && (
-        <ul className="grid gap-4 sm:grid-cols-2">
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-5">
           {events.map((event) => (
             <EventCard key={event.id} event={event} />
           ))}

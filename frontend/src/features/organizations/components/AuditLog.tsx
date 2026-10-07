@@ -40,7 +40,7 @@ export default function AuditLog({
         Journal
       </h2>
       {error && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="alert-error">
           {error}
         </p>
       )}
@@ -48,12 +48,12 @@ export default function AuditLog({
       <ul className="space-y-1 text-sm">
         {entries?.map((entry) => (
           <li key={entry.id}>
-            <time dateTime={entry.createdAt} className="mr-2 text-gray-500">
+            <time dateTime={entry.createdAt} className="mr-2 text-muted">
               {new Date(entry.createdAt).toLocaleDateString('fr-FR')}
             </time>
             {describe(entry)}
             {!!entry.details?.removedShifts && (
-              <span className="text-gray-600">
+              <span className="text-muted">
                 {' '}
                 ({entry.details.removedShifts} créneau(x) à venir retiré(s))
               </span>

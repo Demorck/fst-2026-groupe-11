@@ -100,7 +100,6 @@ describe('DashboardView', () => {
     const calm = screen.getByRole('link', { name: 'Atelier' }).closest('tr');
 
     expect(risky).toHaveAttribute('data-at-risk', 'true');
-    expect(risky).toHaveClass('bg-amber-50');
     expect(within(risky).getByText('Peu rempli')).toBeInTheDocument();
     expect(within(risky).getByText('Créneaux incomplets')).toBeInTheDocument();
     expect(calm).toHaveAttribute('data-at-risk', 'false');

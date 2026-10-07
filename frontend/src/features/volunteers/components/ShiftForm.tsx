@@ -51,7 +51,7 @@ export default function ShiftForm({ shift, onSave, onCancel }: ShiftFormProps) {
     <form
       onSubmit={onSubmit}
       aria-label={shift ? 'Modifier le créneau' : 'Nouveau créneau'}
-      className="space-y-4 rounded-xl border border-gray-200 bg-white p-5"
+      className="card space-y-4"
     >
       <h2 className="text-lg font-semibold">
         {shift ? 'Modifier le créneau' : 'Nouveau créneau'}
@@ -89,22 +89,18 @@ export default function ShiftForm({ shift, onSave, onCancel }: ShiftFormProps) {
         />
       </div>
       {error && (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="alert-error">
           {error}
         </p>
       )}
       <div className="flex flex-wrap gap-3">
-        <button
-          type="submit"
-          disabled={pending}
-          className="min-h-11 rounded-lg bg-indigo-600 px-4 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60"
-        >
+        <button type="submit" disabled={pending} className="btn btn-primary">
           {pending ? 'Enregistrement...' : shift ? 'Enregistrer' : 'Ajouter'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="min-h-11 rounded-lg border border-gray-300 bg-white px-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="btn btn-secondary font-normal"
         >
           Annuler
         </button>

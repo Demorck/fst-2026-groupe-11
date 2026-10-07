@@ -26,7 +26,7 @@ export default function MemberHours({
         Heures de bénévolat
       </h2>
       {error && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="alert-error">
           {error}
         </p>
       )}
@@ -35,7 +35,7 @@ export default function MemberHours({
       {rows && rows.length > 0 && (
         <table className="w-full max-w-2xl text-left text-sm">
           <thead>
-            <tr className="border-b text-gray-600">
+            <tr className="border-b border-line text-muted">
               <th className="py-2 pr-4 font-medium">Bénévole</th>
               <th className="py-2 pr-4 font-medium">Créneaux</th>
               <th className="py-2 pr-4 font-medium">Heures</th>
@@ -44,11 +44,11 @@ export default function MemberHours({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.userId} className="border-b">
+              <tr key={row.userId} className="border-b border-line-soft">
                 <td className="py-2 pr-4">
                   {row.name}
                   {row.status !== 'ACCEPTED' && (
-                    <span className="ml-2 text-xs text-gray-500">
+                    <span className="ml-2 text-xs text-muted">
                       ({STATUS_LABELS[row.status].toLowerCase()})
                     </span>
                   )}
@@ -59,7 +59,7 @@ export default function MemberHours({
                   <Link
                     to={`/organizations/${organizationId}/attestation/${row.userId}`}
                     aria-label={`Attestation de ${row.name}`}
-                    className="text-indigo-700 underline"
+                    className="underline"
                   >
                     Ouvrir
                   </Link>

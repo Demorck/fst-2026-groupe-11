@@ -3,7 +3,7 @@ import OrganizationsOverview from '../features/organizations/components/Organiza
 export default function OrganizationsPage() {
   return (
     <div className="space-y-6">
-      <h1 className="text-4xl font-bold">Mes organisations</h1>
+      <h1 className="page-title">Mes organisations</h1>
       <OrganizationsOverview />
     </div>
   );

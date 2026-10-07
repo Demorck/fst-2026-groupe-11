@@ -15,7 +15,7 @@ export default function OrganizationBubbles({
         <li key={organization.id} title={organization.name}>
           <Link
             to={`/organizations/${organization.id}`}
-            className="inline-block rounded-full focus-visible:outline-2 focus-visible:outline-indigo-600"
+            className="inline-block rounded-full"
           >
             <OrganizationLogo organization={organization} />
             <span className="sr-only">{organization.name}</span>

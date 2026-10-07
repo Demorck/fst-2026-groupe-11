@@ -21,7 +21,7 @@ export default function StatsDetail({ eventId }: { eventId: string }) {
 
   if (error) {
     return (
-      <p role="alert" className="text-red-600">
+      <p role="alert" className="alert-error">
         {error}
       </p>
     );
@@ -38,8 +38,8 @@ export default function StatsDetail({ eventId }: { eventId: string }) {
           <span
             className={
               shift.registered < shift.requiredVolunteers
-                ? 'font-medium text-amber-700'
-                : 'text-green-700'
+                ? 'font-medium text-warn-ink'
+                : 'text-ok-ink'
             }
           >
             {shift.registered} / {shift.requiredVolunteers} bénévoles

@@ -87,26 +87,26 @@ export default function VolunteerShiftsPage() {
     <div className="mx-auto flex max-w-3xl flex-col gap-5">
       <Link
         to={`/events/${eventId}`}
-        className="self-start py-2 text-sm text-indigo-700 hover:underline"
+        className="inline-flex min-h-11 items-center self-start text-sm"
       >
         ← Retour à l'événement
       </Link>
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-4xl font-bold">Créneaux bénévoles</h1>
+        <h1 className="page-title">Créneaux bénévoles</h1>
         {isOrganizer ? (
           !editing && (
             <button
               type="button"
               onClick={() => setEditing('new')}
-              className="min-h-11 rounded-[10px] bg-indigo-600 px-4 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              className="btn btn-primary"
             >
               + Ajouter un créneau
             </button>
           )
         ) : (
-          <span className="text-sm text-gray-600">
-            Vous êtes inscrit sur{' '}
-            <strong className="text-gray-900">{mine}</strong> créneau(x)
+          <span className="text-sm text-muted">
+            Vous êtes inscrit sur <strong className="text-ink">{mine}</strong>{' '}
+            créneau(x)
           </span>
         )}
       </div>
@@ -119,11 +119,11 @@ export default function VolunteerShiftsPage() {
         />
       )}
       {error && (
-        <p role="alert" className="text-red-700">
+        <p role="alert" className="alert-error">
           {error}
         </p>
       )}
-      {!error && !shifts && <p>Chargement...</p>}
+      {!error && !shifts && <p className="text-muted">Chargement...</p>}
       {shifts && (
         <ShiftList
           shifts={shifts}

@@ -6,8 +6,8 @@ export default function LoginPage() {
   if (useSession()) return <Navigate to="/" replace />;
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Connexion</h1>
+    <div className="mx-auto max-w-md space-y-6">
+      <h1 className="page-title">Connexion</h1>
       <LoginForm />
     </div>
   );

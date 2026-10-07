@@ -9,9 +9,6 @@ import { createEvent } from '../api.ts';
 import { CATEGORY_LABELS, EVENT_CATEGORIES } from '../types.ts';
 import type { EventCategory } from '../types.ts';
 
-const fieldClass =
-  'block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 focus-visible:outline-2 focus-visible:outline-indigo-600';
-
 export default function CreateEventForm() {
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
@@ -73,15 +70,15 @@ export default function CreateEventForm() {
 
   if (loadError) {
     return (
-      <p role="alert" className="text-red-600">
+      <p role="alert" className="alert-error">
         {loadError}
       </p>
     );
   }
-  if (!managed) return <p>Chargement...</p>;
+  if (!managed) return <p className="text-muted">Chargement...</p>;
   if (managed.length === 0) {
     return (
-      <div className="min-w-0 flex-[999_1_520px] space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-7">
+      <div className="alert-note min-w-0 flex-[999_1_520px] space-y-3 p-7 text-base">
         <p className="font-semibold">
           Vous ne gérez aucune organisation pour l'instant.
         </p>
@@ -90,10 +87,7 @@ export default function CreateEventForm() {
           créez la vôtre, ou acceptez l'invitation d'un autre gestionnaire,
           avant de créer un événement.
         </p>
-        <Link
-          to="/organizations"
-          className="inline-block rounded-[10px] bg-indigo-600 px-4 py-2 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-        >
+        <Link to="/organizations" className="btn btn-primary">
           Gérer mes organisations
         </Link>
       </div>
@@ -103,19 +97,19 @@ export default function CreateEventForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="min-w-0 flex-[999_1_520px] space-y-5 rounded-xl border border-gray-200 bg-white p-7"
+      className="card min-w-0 flex-[999_1_520px] space-y-5 p-6 sm:p-7"
     >
       <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">
+        <legend className="mb-1 text-sm font-medium">
           Organisations qui participent
         </legend>
         {managed.map(({ id, name }) => (
-          <label key={id} className="flex items-center gap-2">
+          <label key={id} className="flex min-h-11 items-center gap-2">
             <input
               type="checkbox"
               checked={selected.includes(id)}
               onChange={() => toggle(id)}
-              className="size-4 accent-indigo-600"
+              className="size-5 accent-brand"
             />
             {name}
           </label>
@@ -127,14 +121,14 @@ export default function CreateEventForm() {
         value={title}
         onChange={(e) => setTitle(e.target.value)}
       />
-      <label className="block space-y-1">
-        <span className="text-sm font-medium">Description</span>
+      <label className="field-label">
+        <span>Description</span>
         <textarea
           required
           rows={5}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className={fieldClass}
+          className="field"
         />
       </label>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -170,12 +164,12 @@ export default function CreateEventForm() {
           value={capacity}
           onChange={(e) => setCapacity(e.target.value)}
         />
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">Catégorie</span>
+        <label className="field-label">
+          <span>Catégorie</span>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value as EventCategory)}
-            className={fieldClass}
+            className="field"
           >
             {EVENT_CATEGORIES.map((c) => (
               <option key={c} value={c}>
@@ -192,7 +186,7 @@ export default function CreateEventForm() {
         onChange={(e) => setImageUrl(e.target.value)}
       />
       {error && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="alert-error">
           {error}
         </p>
       )}
@@ -200,13 +194,13 @@ export default function CreateEventForm() {
         <button
           type="submit"
           disabled={pending}
-          className="min-h-12 rounded-[10px] bg-indigo-600 px-5 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60"
+          className="btn btn-primary min-h-12 px-5"
         >
           {pending ? 'Création...' : "Créer l'événement"}
         </button>
         <Link
           to="/events"
-          className="inline-flex min-h-12 items-center rounded-[10px] border border-gray-300 px-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="btn btn-secondary min-h-12 px-5 font-normal"
         >
           Annuler
         </Link>

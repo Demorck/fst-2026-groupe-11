@@ -2,7 +2,13 @@ import { Link } from 'react-router';
 import { useSession } from '../../auth/session.ts';
 import OrganizationBubbles from '../../organizations/components/OrganizationBubbles.tsx';
 import VolunteerBadge from '../../organizations/components/VolunteerBadge.tsx';
-import { CATEGORY_LABELS, formatEventDate } from '../types.ts';
+import ProgressBar from '../../../components/ProgressBar.tsx';
+import {
+  CATEGORY_LABELS,
+  CATEGORY_STYLES,
+  formatEventDate,
+  formatShortDay,
+} from '../types.ts';
 import type { EventWithSeats } from '../types.ts';
 
 export default function EventCard({ event }: { event: EventWithSeats }) {
@@ -12,35 +18,58 @@ export default function EventCard({ event }: { event: EventWithSeats }) {
     event.volunteers.missing > 0 &&
     (role === 'VOLUNTEER' || role === 'ORGANIZER');
 
+  const { tint, ink } = CATEGORY_STYLES[event.category];
+  const taken = event.capacity - event.remainingSeats;
+
   return (
-    <li className="rounded bg-white p-4 shadow">
-      <Link
-        to={`/events/${event.id}`}
-        className="text-lg font-semibold text-indigo-700 hover:underline focus-visible:outline-2 focus-visible:outline-indigo-600"
+    <li className="flex flex-col overflow-hidden rounded-xl border border-line bg-white">
+      <div
+        className="flex h-30 flex-col justify-between p-4"
+        style={{ backgroundColor: tint, color: ink }}
       >
-        {event.title}
-      </Link>
-      <p className="text-sm text-gray-600">
-        {formatEventDate(event.startsAt)} · {event.location}
-      </p>
-      <p className="mt-2 flex gap-3 text-sm">
-        <span className="rounded bg-indigo-50 px-2 py-0.5 text-indigo-700">
+        <span
+          className="badge self-start bg-white text-[13px]"
+          style={{ color: ink }}
+        >
           {CATEGORY_LABELS[event.category]}
         </span>
-        <span>
-          {event.remainingSeats > 0
-            ? `${event.remainingSeats} place(s) restante(s)`
-            : 'Complet'}
+        <span className="font-display text-[28px] leading-none font-bold">
+          {formatShortDay(event.startsAt)}
         </span>
-      </p>
-      {recruiting && (
-        <p className="mt-2 text-sm font-medium text-amber-700">
-          Il manque {event.volunteers.missing} bénévole(s)
+      </div>
+      <div className="flex grow flex-col gap-2.5 px-[18px] pt-4 pb-[18px]">
+        <h2 className="text-[19px] leading-snug font-semibold">
+          <Link
+            to={`/events/${event.id}`}
+            className="text-ink hover:text-brand hover:underline"
+          >
+            {event.title}
+          </Link>
+        </h2>
+        <p className="text-sm text-muted">
+          {formatEventDate(event.startsAt)} · {event.location}
         </p>
-      )}
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <OrganizationBubbles organizations={event.organizations} />
-        <VolunteerBadge status={event.volunteerStatus} />
+        <div className="mt-auto space-y-1.5">
+          <ProgressBar
+            value={taken}
+            max={event.capacity}
+            label={`Remplissage de ${event.title}`}
+          />
+          <p className="text-[13px] text-muted">
+            {event.remainingSeats > 0
+              ? `${event.remainingSeats} place(s) restante(s)`
+              : 'Complet'}
+          </p>
+        </div>
+        {recruiting && (
+          <p className="text-sm font-medium text-warn-ink">
+            Il manque {event.volunteers.missing} bénévole(s)
+          </p>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <OrganizationBubbles organizations={event.organizations} />
+          <VolunteerBadge status={event.volunteerStatus} />
+        </div>
       </div>
     </li>
   );

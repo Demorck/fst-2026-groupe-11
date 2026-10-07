@@ -1,1 +1,117 @@
 @import 'tailwindcss';
+
+@theme {
+  --font-display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-sans: 'Figtree', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #16181d;
+  --color-muted: #555a66;
+  --color-canvas: #f5f6fa;
+  --color-line: #e3e5ec;
+  --color-line-soft: #ecedf1;
+  --color-field: #c9ccd6;
+
+  --color-brand: #3b3fd8;
+  --color-brand-deep: #2a2da8;
+  --color-brand-tint: #e4e6fb;
+  --color-brand-edge: #c7caf5;
+
+  --color-ok-bg: #ddf3e6;
+  --color-ok-ink: #14532d;
+  --color-warn-bg: #fde5d8;
+  --color-warn-ink: #9a3412;
+  --color-danger: #b42318;
+  --color-danger-bg: #fee4e2;
+}
+
+@layer base {
+  body {
+    @apply bg-canvas font-sans text-base text-ink antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply font-display;
+  }
+  a {
+    @apply text-brand hover:text-brand-deep;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .page-title {
+    @apply font-display text-4xl leading-tight font-bold;
+  }
+  .page-subtitle {
+    @apply mt-2 text-muted;
+  }
+
+  .card {
+    @apply rounded-xl border border-line bg-white p-5;
+  }
+
+  .btn {
+    @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-[10px] text-center px-4 font-semibold no-underline disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .btn-primary {
+    @apply bg-brand text-white hover:bg-brand-deep hover:text-white;
+  }
+  .btn-secondary {
+    @apply border border-field bg-white text-ink hover:bg-canvas hover:text-ink;
+  }
+  .btn-danger {
+    @apply bg-danger text-white hover:bg-danger/90 hover:text-white;
+  }
+  .btn-danger-outline {
+    @apply border border-danger/40 bg-white text-danger hover:bg-danger-bg hover:text-danger;
+  }
+
+  .field {
+    @apply block min-h-11 w-full rounded-lg border border-field bg-white px-3 py-2 text-base text-ink placeholder:text-muted aria-invalid:border-2 aria-invalid:border-danger;
+  }
+  .field-label {
+    @apply block space-y-1.5 text-sm font-medium;
+  }
+  .field-error {
+    @apply text-sm font-normal text-danger;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full bg-line-soft px-2.5 py-0.5 text-xs font-semibold text-ink;
+  }
+  .badge-brand {
+    @apply bg-brand-tint text-brand-deep;
+  }
+  .badge-ok {
+    @apply bg-ok-bg text-ok-ink;
+  }
+  .badge-warn {
+    @apply bg-warn-bg text-warn-ink;
+  }
+
+  .alert-error {
+    @apply rounded-lg bg-danger-bg px-4 py-3 text-sm font-medium text-danger;
+  }
+  .alert-note {
+    @apply rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900;
+  }
+
+  .progress {
+    @apply h-1.5 w-full overflow-hidden rounded-full bg-line-soft;
+  }
+  .progress-bar {
+    @apply h-full rounded-full bg-brand;
+  }
+}

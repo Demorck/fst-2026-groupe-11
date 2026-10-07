@@ -24,7 +24,7 @@ export default function RegisterForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="max-w-sm space-y-4">
+    <form onSubmit={onSubmit} className="card space-y-5 p-6">
       <TextField
         label="Nom"
         autoComplete="name"
@@ -49,12 +49,12 @@ export default function RegisterForm() {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
-      <label className="block space-y-1">
-        <span className="text-sm font-medium">Rôle</span>
+      <label className="field-label">
+        <span>Rôle</span>
         <select
           value={role}
           onChange={(e) => setRole(e.target.value as Role)}
-          className="block w-full rounded border border-gray-300 bg-white px-3 py-2 focus-visible:outline-2 focus-visible:outline-indigo-600"
+          className="field"
         >
           {ROLES.map((r) => (
             <option key={r} value={r}>
@@ -64,20 +64,20 @@ export default function RegisterForm() {
         </select>
       </label>
       {error && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="alert-error">
           {error}
         </p>
       )}
       <button
         type="submit"
         disabled={pending}
-        className="rounded bg-indigo-600 px-4 py-2 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60"
+        className="btn btn-primary w-full"
       >
         {pending ? 'Inscription...' : "S'inscrire"}
       </button>
-      <p className="text-sm">
+      <p className="text-center text-sm text-muted">
         Déjà un compte ?{' '}
-        <Link to="/login" className="underline">
+        <Link to="/login" className="font-semibold">
           Se connecter
         </Link>
       </p>

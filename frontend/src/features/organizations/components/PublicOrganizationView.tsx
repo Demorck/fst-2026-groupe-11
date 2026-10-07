@@ -40,7 +40,7 @@ export default function PublicOrganizationView({
   }
   if (error) {
     return (
-      <p role="alert" className="text-red-600">
+      <p role="alert" className="alert-error">
         Erreur : {error.message}
       </p>
     );
@@ -55,17 +55,17 @@ export default function PublicOrganizationView({
           className="size-24 text-3xl"
         />
         <div className="space-y-1">
-          <h1 className="text-4xl font-bold">{organization.name}</h1>
+          <h1 className="page-title">{organization.name}</h1>
           {organization.description && (
-            <p className="text-gray-600">{organization.description}</p>
+            <p className="text-muted">{organization.description}</p>
           )}
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-muted">
             {organization.memberCount} membre(s)
           </p>
           {member && (
             <Link
               to={`/organizations/${organization.id}/manage`}
-              className="text-sm text-indigo-700 underline"
+              className="text-sm underline"
             >
               Gérer l'organisation
             </Link>
@@ -82,17 +82,14 @@ export default function PublicOrganizationView({
         )}
         <ul className="grid gap-3 sm:grid-cols-2">
           {organization.upcomingEvents.map((event) => (
-            <li
-              key={event.id}
-              className="rounded-xl border border-gray-200 bg-white p-4"
-            >
+            <li key={event.id} className="card p-4">
               <Link
                 to={`/events/${event.id}`}
-                className="font-semibold text-indigo-700 hover:underline"
+                className="font-semibold hover:underline"
               >
                 {event.title}
               </Link>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted">
                 {formatEventDate(event.startsAt)} · {event.location}
               </p>
               <p className="text-sm">
@@ -105,7 +102,7 @@ export default function PublicOrganizationView({
         </ul>
         <Link
           to={`/?organization=${organization.id}`}
-          className="inline-block text-indigo-700 underline"
+          className="inline-block underline"
         >
           Voir tous ses événements
         </Link>

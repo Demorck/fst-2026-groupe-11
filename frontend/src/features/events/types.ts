@@ -22,6 +22,19 @@ export const CATEGORY_LABELS: Record<EventCategory, string> = {
   OTHER: 'Autre',
 };
 
+/** Banner tint and ink of each category, as in the mockup. */
+export const CATEGORY_STYLES: Record<
+  EventCategory,
+  { tint: string; ink: string }
+> = {
+  CONFERENCE: { tint: '#E4E6FB', ink: '#2A2DA8' },
+  PARTY: { tint: '#FDE5D8', ink: '#9A3412' },
+  SPORT: { tint: '#DDF3E6', ink: '#166534' },
+  CULTURE: { tint: '#F3E3F7', ink: '#6B21A8' },
+  WORKSHOP: { tint: '#FFF1C7', ink: '#854D0E' },
+  OTHER: { tint: '#ECEDF1', ink: '#3F4350' },
+};
+
 /** Mirrors the backend CreateEventDto, dates as ISO strings. */
 export interface CreateEventInput {
   title: string;
@@ -63,3 +76,6 @@ export const formatEventDate = (iso: string) =>
     dateStyle: 'full',
     timeStyle: 'short',
   });
+
+export const formatShortDay = (iso: string) =>
+  new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });

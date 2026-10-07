@@ -23,7 +23,7 @@ export default function MyTickets() {
 
   if (error) {
     return (
-      <p role="alert" className="text-red-600">
+      <p role="alert" className="alert-error">
         {error}
       </p>
     );
@@ -31,9 +31,9 @@ export default function MyTickets() {
   if (!tickets) return <p>Chargement...</p>;
   if (tickets.length === 0) {
     return (
-      <p>
+      <p className="card text-muted">
         Vous n'avez pas encore de billet.{' '}
-        <Link to="/" className="underline">
+        <Link to="/" className="font-semibold underline">
           Voir les événements
         </Link>
       </p>
@@ -71,25 +71,34 @@ function TicketSection({
         {tickets.map(({ id, code, checkedInAt, event }) => (
           <li
             key={id}
-            className="flex flex-wrap items-center justify-between gap-4 rounded bg-white p-4 shadow"
+            className="flex flex-wrap rounded-xl border border-line bg-white"
           >
-            <div className="space-y-1">
+            <div className="flex min-w-0 flex-[999_1_320px] flex-col gap-1.5 px-6 py-5">
+              {checkedInAt && (
+                <span className="badge badge-ok self-start">
+                  Présence validée
+                </span>
+              )}
               <Link
                 to={`/events/${event.id}`}
-                className="text-lg font-semibold underline"
+                className="text-xl font-semibold text-ink hover:text-brand hover:underline"
               >
                 {event.title}
               </Link>
-              <p>{formatDate(event.startsAt)}</p>
-              <p>{event.location}</p>
-              <p>
-                Code : <strong className="font-mono">{code}</strong>
-              </p>
-              {checkedInAt && (
-                <p className="text-green-700">Présence validée</p>
-              )}
+              <p className="text-sm text-muted">{formatDate(event.startsAt)}</p>
+              <p className="text-sm text-muted">{event.location}</p>
             </div>
-            <TicketQrCode code={code} />
+            <div className="flex flex-[1_1_240px] items-center justify-between gap-4 border-t-2 border-dashed border-line px-6 py-5 sm:border-t-0 sm:border-l-2">
+              <div className="space-y-1">
+                <p className="text-[13px] text-muted">Code du billet</p>
+                <p>
+                  <strong className="font-mono text-xl tracking-wide">
+                    {code}
+                  </strong>
+                </p>
+              </div>
+              <TicketQrCode code={code} />
+            </div>
           </li>
         ))}
       </ul>

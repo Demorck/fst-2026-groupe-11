@@ -19,14 +19,10 @@ export default function HealthPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">État de l'API</h1>
-      {error && <p className="text-red-600">Erreur : {error}</p>}
+      <h1 className="page-title">État de l'API</h1>
+      {error && <p className="alert-error">Erreur : {error}</p>}
       {!error && !health && <p>Chargement...</p>}
-      {health && (
-        <pre className="rounded bg-white p-4 shadow">
-          {JSON.stringify(health, null, 2)}
-        </pre>
-      )}
+      {health && <pre className="card">{JSON.stringify(health, null, 2)}</pre>}
     </div>
   );
 }

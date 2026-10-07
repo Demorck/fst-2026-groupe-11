@@ -1,8 +1,5 @@
 import { useState } from 'react';
 
-const base =
-  'rounded-lg px-3 py-1.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60';
-
 /** A destructive action asks for a second click before it runs. */
 export default function ConfirmButton({
   label,
@@ -25,7 +22,7 @@ export default function ConfirmButton({
         type="button"
         onClick={() => setAsking(true)}
         aria-label={ariaLabel}
-        className={`${base} border border-red-300 bg-white text-red-700`}
+        className={`btn btn-danger-outline text-sm`}
       >
         {label}
       </button>
@@ -46,7 +43,7 @@ export default function ConfirmButton({
             setAsking(false);
           }
         }}
-        className={`${base} bg-red-600 text-white`}
+        className={`btn btn-danger text-sm`}
       >
         Confirmer
       </button>
@@ -54,7 +51,7 @@ export default function ConfirmButton({
         type="button"
         disabled={pending}
         onClick={() => setAsking(false)}
-        className={`${base} border border-gray-300 bg-white`}
+        className={`btn btn-secondary text-sm`}
       >
         Annuler
       </button>

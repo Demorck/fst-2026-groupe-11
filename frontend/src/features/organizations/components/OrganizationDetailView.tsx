@@ -47,7 +47,7 @@ function InviteForm({
   return (
     <form onSubmit={onSubmit} className="max-w-xl space-y-3">
       <h2 className="text-xl font-semibold">Inviter</h2>
-      <p className="text-sm text-gray-600">
+      <p className="text-sm text-muted">
         La personne doit avoir un compte bénévole ou organisateur et accepter
         l'invitation dans les 7 jours.
       </p>
@@ -59,12 +59,15 @@ function InviteForm({
         onChange={(e) => setEmail(e.target.value)}
       />
       {error && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="alert-error">
           {translate(error)}
         </p>
       )}
       {sent && (
-        <p role="status" className="text-green-700">
+        <p
+          role="status"
+          className="rounded-lg bg-ok-bg px-4 py-3 text-sm font-medium text-ok-ink"
+        >
           Si cette adresse correspond à un compte bénévole ou organisateur, une
           invitation a été envoyée.
         </p>
@@ -72,7 +75,7 @@ function InviteForm({
       <button
         type="submit"
         disabled={pending}
-        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60"
+        className="btn btn-primary text-sm"
       >
         {pending ? 'Envoi...' : 'Inviter'}
       </button>
@@ -142,7 +145,7 @@ export default function OrganizationDetailView({
 
   if (error) {
     return (
-      <p role="alert" className="text-red-600">
+      <p role="alert" className="alert-error">
         {error}
       </p>
     );
@@ -166,22 +169,22 @@ export default function OrganizationDetailView({
           className="size-24 text-3xl"
         />
         <div className="space-y-1">
-          <h1 className="text-4xl font-bold">{organization.name}</h1>
+          <h1 className="page-title">{organization.name}</h1>
           {organization.description && (
-            <p className="text-gray-600">{organization.description}</p>
+            <p className="text-muted">{organization.description}</p>
           )}
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-muted">
             Votre rôle : {ROLE_LABELS[organization.role].toLowerCase()}
           </p>
           <p className="flex flex-wrap items-center gap-4 text-sm">
             <Link
               to={`/organizations/${organization.id}`}
-              className="text-indigo-700 underline"
+              className="underline"
             >
               Voir la page publique
             </Link>
             {iAmCreator && hasCoManagers ? (
-              <span className="text-gray-600">
+              <span className="text-muted">
                 Retirez les co-gestionnaires pour pouvoir quitter l'organisation
               </span>
             ) : (
@@ -203,7 +206,7 @@ export default function OrganizationDetailView({
       </div>
 
       {actionError && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="alert-error">
           {actionError}
         </p>
       )}
@@ -222,7 +225,7 @@ export default function OrganizationDetailView({
             />
           </label>
           {logoError && (
-            <p role="alert" className="text-red-600">
+            <p role="alert" className="alert-error">
               {logoError}
             </p>
           )}
@@ -238,19 +241,19 @@ export default function OrganizationDetailView({
             ({ id, role, status, expired, isCreator, user: member }) => (
               <li
                 key={id}
-                className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-3"
+                className="flex flex-wrap items-center gap-3 card p-3"
               >
                 <span className="flex-1">
                   <span className="font-medium">{member.name}</span>
                   {member.email && (
-                    <span className="ml-2 text-sm text-gray-600">
+                    <span className="ml-2 text-sm text-muted">
                       {member.email}
                     </span>
                   )}
                 </span>
                 <span className="text-sm">{ROLE_LABELS[role]}</span>
                 {status !== 'ACCEPTED' && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                  <span className="badge badge-warn">
                     {expired ? 'Invitation expirée' : STATUS_LABELS[status]}
                   </span>
                 )}

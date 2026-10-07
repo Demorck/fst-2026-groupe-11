@@ -13,9 +13,6 @@ const ERROR_MESSAGES: Record<string, string> = {
     'Vous avez déjà réservé une place pour cet événement.',
 };
 
-const buttonClass =
-  'rounded px-4 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60';
-
 /** Ticket booking for the event detail page, with a confirmation step before the API call. */
 export default function ReserveButton({ eventId }: { eventId: string }) {
   const { user } = useAuth();
@@ -31,7 +28,7 @@ export default function ReserveButton({ eventId }: { eventId: string }) {
 
   if (!user) {
     return (
-      <Link to="/login" className="underline">
+      <Link to="/login" className="btn btn-primary w-full">
         Connectez-vous pour réserver
       </Link>
     );
@@ -42,11 +39,14 @@ export default function ReserveButton({ eventId }: { eventId: string }) {
   if (ticket) {
     return (
       <div className="space-y-3">
-        <p role="status" className="text-green-700">
-          Votre place est réservée. Votre code : <strong>{ticket.code}</strong>
+        <p role="status" className="rounded-[10px] bg-ok-bg p-4 text-ok-ink">
+          Votre place est réservée. Votre code :{' '}
+          <strong className="font-mono text-xl tracking-wide">
+            {ticket.code}
+          </strong>
         </p>
         <TicketQrCode code={ticket.code} />
-        <Link to="/me/tickets" className="underline">
+        <Link to="/me/tickets" className="btn btn-secondary">
           Voir mes billets
         </Link>
       </div>
@@ -56,19 +56,19 @@ export default function ReserveButton({ eventId }: { eventId: string }) {
   return (
     <div className="space-y-2">
       {error && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="alert-error">
           {ERROR_MESSAGES[error] ?? error}
         </p>
       )}
       {confirming ? (
         <div className="space-y-2">
           <p>Confirmer la réservation d'une place ?</p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => void submit()}
               disabled={pending}
-              className={`${buttonClass} bg-indigo-600 text-white`}
+              className="btn btn-primary"
             >
               {pending ? 'Réservation...' : 'Confirmer'}
             </button>
@@ -76,7 +76,7 @@ export default function ReserveButton({ eventId }: { eventId: string }) {
               type="button"
               onClick={() => setConfirming(false)}
               disabled={pending}
-              className={`${buttonClass} border border-gray-300 bg-white`}
+              className="btn btn-secondary"
             >
               Annuler
             </button>
@@ -86,7 +86,7 @@ export default function ReserveButton({ eventId }: { eventId: string }) {
         <button
           type="button"
           onClick={() => setConfirming(true)}
-          className={`${buttonClass} bg-indigo-600 text-white`}
+          className="btn btn-primary w-full"
         >
           Réserver
         </button>

@@ -20,12 +20,12 @@ export default function RequireAuth({ roles }: RequireAuthProps) {
   if (roles && !roles.includes(session.user.role)) {
     return (
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold">Accès refusé</h1>
+        <h1 className="page-title">Accès refusé</h1>
         <p>
           Cette page est réservée au rôle{' '}
           {roles.map((role) => ROLE_LABELS[role]).join(' ou ')}.
         </p>
-        <Link to="/" className="underline">
+        <Link to="/" className="font-semibold underline">
           Retour aux événements
         </Link>
       </div>

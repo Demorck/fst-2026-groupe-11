@@ -82,12 +82,14 @@ describe('EventsPage', () => {
   });
 
   it.each([
-    ['ASSIGNED', 'Vous êtes bénévole sur cet événement', 'bg-green-100'],
-    ['AVAILABLE', 'Vous pouvez bénévoler à cet événement', 'bg-gray-100'],
-  ])('shows the %s badge of a volunteer', async (status, text, color) => {
+    ['ASSIGNED', 'Vous êtes bénévole sur cet événement', true],
+    ['AVAILABLE', 'Vous pouvez bénévoler à cet événement', false],
+  ])('shows the %s badge of a volunteer', async (status, text, assigned) => {
     renderAt('/', json([{ ...event, volunteerStatus: status }]));
 
-    expect(await screen.findByText(text)).toHaveClass(color);
+    expect((await screen.findByText(text)).classList.contains('badge-ok')).toBe(
+      assigned,
+    );
   });
 
   it('shows no badge without volunteer status', async () => {
