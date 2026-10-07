@@ -81,6 +81,18 @@ export class VolunteersController {
     return this.volunteers.assign(id, user.id);
   }
 
+  @Delete('shifts/:id/assignments')
+  @HttpCode(204)
+  @Roles(Role.VOLUNTEER)
+  @ApiForbiddenResponse({ description: 'Réservé aux bénévoles' })
+  @ApiNotFoundResponse({ description: 'Pas inscrit sur ce créneau' })
+  unassign(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.volunteers.unassign(id, user.id);
+  }
+
   @Patch('shifts/:id')
   @Roles(Role.ORGANIZER)
   @ApiForbiddenResponse({

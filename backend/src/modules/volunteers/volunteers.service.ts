@@ -96,6 +96,15 @@ export class VolunteersService {
     });
   }
 
+  async unassign(shiftId: string, volunteerId: string) {
+    const { count } = await this.prisma.shiftAssignment.deleteMany({
+      where: { shiftId, volunteerId },
+    });
+    if (count === 0) {
+      throw new NotFoundException('Not registered on this shift');
+    }
+  }
+
   async updateShift(id: string, dto: UpdateShiftDto, userId: string) {
     const shift = await this.findOwnedShift(id, userId);
     // A partial update can break the order only against the stored date

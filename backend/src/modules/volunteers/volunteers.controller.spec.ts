@@ -12,9 +12,12 @@ describe('VolunteersController roles', () => {
     expect(rolesOf(proto.list)).toEqual([Role.VOLUNTEER, Role.ORGANIZER]);
   });
 
-  it('reserves the sign-up to volunteers', () => {
-    expect(rolesOf(proto.assign)).toEqual([Role.VOLUNTEER]);
-  });
+  it.each(['assign', 'unassign'] as const)(
+    'reserves %s to volunteers',
+    (method) => {
+      expect(rolesOf(proto[method])).toEqual([Role.VOLUNTEER]);
+    },
+  );
 
   it.each(['create', 'update', 'remove'] as const)(
     'reserves %s to organizers',

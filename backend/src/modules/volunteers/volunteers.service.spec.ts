@@ -301,3 +301,32 @@ describe('VolunteersService.assign', () => {
     expect(s.tx.shiftAssignment.create).not.toHaveBeenCalled();
   });
 });
+
+describe('VolunteersService.unassign', () => {
+  async function run(count: number) {
+    const deleteMany = vi.fn().mockResolvedValue({ count });
+    const module = await Test.createTestingModule({
+      providers: [
+        VolunteersService,
+        {
+          provide: PrismaService,
+          useValue: { shiftAssignment: { deleteMany } },
+        },
+      ],
+    }).compile();
+    await module.get(VolunteersService).unassign('s1', 'v1');
+    return deleteMany;
+  }
+
+  it('removes only the own assignment', async () => {
+    const deleteMany = await run(1);
+
+    expect(deleteMany).toHaveBeenCalledWith({
+      where: { shiftId: 's1', volunteerId: 'v1' },
+    });
+  });
+
+  it('throws 404 when not registered', async () => {
+    await expect(run(0)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
