@@ -27,6 +27,10 @@ export default function RootLayout() {
             </>
           )}
           {session && <NavLink to="/me/tickets">Mes billets</NavLink>}
+          {(session?.user.role === 'ORGANIZER' ||
+            session?.user.role === 'VOLUNTEER') && (
+            <NavLink to="/organizations">Mes organisations</NavLink>
+          )}
           {session ? (
             <>
               <NavLink to="/profile" className="ml-auto">

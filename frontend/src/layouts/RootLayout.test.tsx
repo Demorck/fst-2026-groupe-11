@@ -88,6 +88,20 @@ describe('RootLayout header', () => {
     expect(screen.queryByRole('link', { name: 'Mes billets' })).toBeNull();
   });
 
+  it.each([
+    ['ORGANIZER', true],
+    ['VOLUNTEER', true],
+    ['PARTICIPANT', false],
+  ])('shows the organizations link to a %s: %s', (role, shown) => {
+    logIn(role);
+
+    renderLayout();
+
+    expect(
+      screen.queryByRole('link', { name: 'Mes organisations' }) !== null,
+    ).toBe(shown);
+  });
+
   it('hides the organizer links when logged out', () => {
     renderLayout();
 

@@ -10,6 +10,8 @@ import HealthPage from './pages/HealthPage.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import MyTicketsPage from './pages/MyTicketsPage.tsx';
 import NotFoundPage from './pages/NotFoundPage.tsx';
+import OrganizationPage from './pages/OrganizationPage.tsx';
+import OrganizationsPage from './pages/OrganizationsPage.tsx';
 import RegisterPage from './pages/RegisterPage.tsx';
 import VolunteerShiftsPage from './pages/VolunteerShiftsPage.tsx';
 
@@ -37,6 +39,11 @@ export const router = createBrowserRouter([
       {
         element: <RequireAuth roles={['VOLUNTEER', 'ORGANIZER']} />,
         children: [
+          { path: 'organizations', element: <OrganizationsPage /> },
+          {
+            path: 'organizations/:organizationId',
+            element: <OrganizationPage />,
+          },
           { path: 'events/:eventId/shifts', element: <VolunteerShiftsPage /> },
         ],
       },
