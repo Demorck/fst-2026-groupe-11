@@ -4,6 +4,7 @@ import { useSubmit } from '../../auth/hooks/useSubmit.ts';
 import { useAuth } from '../../auth/useAuth.ts';
 import { reserveTicket } from '../api.ts';
 import type { Ticket } from '../types.ts';
+import TicketQrCode from './TicketQrCode.tsx';
 
 // The API answers in English, the interface speaks French
 const ERROR_MESSAGES: Record<string, string> = {
@@ -40,9 +41,15 @@ export default function ReserveButton({ eventId }: { eventId: string }) {
 
   if (ticket) {
     return (
-      <p role="status" className="text-green-700">
-        Votre place est réservée. Votre code : <strong>{ticket.code}</strong>
-      </p>
+      <div className="space-y-3">
+        <p role="status" className="text-green-700">
+          Votre place est réservée. Votre code : <strong>{ticket.code}</strong>
+        </p>
+        <TicketQrCode code={ticket.code} />
+        <Link to="/me/tickets" className="underline">
+          Voir mes billets
+        </Link>
+      </div>
     );
   }
 
