@@ -6,7 +6,7 @@ const BADGES: Record<VolunteerStatus, { text: string; className: string }> = {
     className: 'badge-ok',
   },
   AVAILABLE: {
-    text: 'Vous pouvez bénévoler à cet événement',
+    text: 'Vous pouvez vous inscrire comme bénévole',
     className: 'badge',
   },
 };

@@ -2,13 +2,9 @@ import { Link } from 'react-router';
 import { useSession } from '../../auth/session.ts';
 import OrganizationBubbles from '../../organizations/components/OrganizationBubbles.tsx';
 import VolunteerBadge from '../../organizations/components/VolunteerBadge.tsx';
+import CategoryBanner from './CategoryBanner.tsx';
 import ProgressBar from '../../../components/ProgressBar.tsx';
-import {
-  CATEGORY_LABELS,
-  CATEGORY_STYLES,
-  formatEventDate,
-  formatShortDay,
-} from '../types.ts';
+import { formatEventDate, formatShortDay } from '../types.ts';
 import type { EventWithSeats } from '../types.ts';
 
 export default function EventCard({ event }: { event: EventWithSeats }) {
@@ -18,30 +14,19 @@ export default function EventCard({ event }: { event: EventWithSeats }) {
     event.volunteers.missing > 0 &&
     (role === 'VOLUNTEER' || role === 'ORGANIZER');
 
-  const { tint, ink } = CATEGORY_STYLES[event.category];
   const taken = event.capacity - event.remainingSeats;
 
   return (
-    <li className="flex flex-col overflow-hidden rounded-xl border border-line bg-white">
-      <div
-        className="flex h-30 flex-col justify-between p-4"
-        style={{ backgroundColor: tint, color: ink }}
-      >
-        <span
-          className="badge self-start bg-white text-[13px]"
-          style={{ color: ink }}
-        >
-          {CATEGORY_LABELS[event.category]}
-        </span>
-        <span className="font-display text-[28px] leading-none font-bold">
-          {formatShortDay(event.startsAt)}
-        </span>
-      </div>
+    <li className="group relative flex flex-col overflow-hidden rounded-xl border border-line bg-white focus-within:border-brand motion-safe:transition motion-safe:duration-150 hover:border-brand-edge hover:shadow-lg hover:shadow-ink/5 motion-safe:hover:-translate-y-0.5">
+      <CategoryBanner
+        category={event.category}
+        day={formatShortDay(event.startsAt)}
+      />
       <div className="flex grow flex-col gap-2.5 px-[18px] pt-4 pb-[18px]">
         <h2 className="text-[19px] leading-snug font-semibold">
           <Link
             to={`/events/${event.id}`}
-            className="text-ink hover:text-brand hover:underline"
+            className="text-ink after:absolute after:inset-0 group-hover:text-brand group-hover:underline hover:text-brand"
           >
             {event.title}
           </Link>
@@ -67,7 +52,10 @@ export default function EventCard({ event }: { event: EventWithSeats }) {
           </p>
         )}
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <OrganizationBubbles organizations={event.organizations} />
+          {/* above the stretched title link, so that each bubble stays clickable */}
+          <div className="relative z-10">
+            <OrganizationBubbles organizations={event.organizations} max={3} />
+          </div>
           <VolunteerBadge status={event.volunteerStatus} />
         </div>
       </div>

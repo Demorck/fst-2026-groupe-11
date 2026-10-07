@@ -15,7 +15,7 @@ describe('VolunteerBadge', () => {
     render(<VolunteerBadge status="AVAILABLE" />);
 
     expect(
-      screen.getByText('Vous pouvez bénévoler à cet événement'),
+      screen.getByText('Vous pouvez vous inscrire comme bénévole'),
     ).not.toHaveClass('badge-ok');
   });
 

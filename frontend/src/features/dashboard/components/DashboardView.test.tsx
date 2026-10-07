@@ -116,12 +116,16 @@ describe('DashboardView', () => {
     expect(await screen.findByText('—')).toBeInTheDocument();
   });
 
-  it('filters on one organization through the selector', async () => {
+  it('filters on one organization through the pills', async () => {
     const fetch = stubApi([indicators('e1', 'Gala')]);
     renderView();
     await screen.findByRole('link', { name: 'Gala' });
 
-    await userEvent.selectOptions(screen.getByLabelText('Organisation'), 'o2');
+    expect(screen.getByRole('button', { name: 'Toutes' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Sport' }));
 
     await vi.waitFor(() =>
       expect(fetch.mock.calls.map(([url]) => url)).toContain(
@@ -129,9 +133,10 @@ describe('DashboardView', () => {
       ),
     );
     expect(fetch.mock.calls[0][0]).toBe('/api/dashboard');
-    expect(
-      screen.getByRole('option', { name: 'Toutes mes organisations' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sport' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('opens the shift by shift detail of an event', async () => {

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import EventDetailPage from './EventDetailPage.tsx';
@@ -42,7 +42,10 @@ function logInAs(role: string) {
 }
 
 function renderAt(path: string, response: Response) {
-  const fetch = vi.fn().mockResolvedValue(response);
+  // a participant's detail page also looks for the tickets already held
+  const fetch = vi.fn((url: string) =>
+    Promise.resolve(url === '/api/me/tickets' ? new Response('[]') : response),
+  );
   vi.stubGlobal('fetch', fetch);
   const router = createMemoryRouter(
     [
@@ -81,9 +84,23 @@ describe('EventsPage', () => {
     expect(within(bubbles).getByText('Club Sport')).toBeInTheDocument();
   });
 
+  it('shows three organizations at most on a card, then how many more', async () => {
+    const organizations = ['A', 'B', 'C', 'D', 'E'].map((name) => ({
+      ...event.organizations[0],
+      id: `o${name}`,
+      name,
+    }));
+    renderAt('/', json([{ ...event, organizations }]));
+
+    const bubbles = await screen.findByRole('list', { name: 'Organisations' });
+
+    expect(within(bubbles).getAllByRole('link')).toHaveLength(3);
+    expect(within(bubbles).getByText('+2 organisations')).toBeInTheDocument();
+  });
+
   it.each([
     ['ASSIGNED', 'Vous êtes bénévole sur cet événement', true],
-    ['AVAILABLE', 'Vous pouvez bénévoler à cet événement', false],
+    ['AVAILABLE', 'Vous pouvez vous inscrire comme bénévole', false],
   ])('shows the %s badge of a volunteer', async (status, text, assigned) => {
     renderAt('/', json([{ ...event, volunteerStatus: status }]));
 
@@ -248,9 +265,8 @@ describe('EventDetailPage', () => {
     logInAs('PARTICIPANT');
     renderAt('/events/e1', json(event));
 
-    expect(
-      await screen.findByRole('button', { name: 'Réserver' }),
-    ).toBeEnabled();
+    const button = await screen.findByRole('button', { name: 'Réserver' });
+    await waitFor(() => expect(button).toBeEnabled());
   });
 
   it('offers a login link to a visitor instead of booking', async () => {

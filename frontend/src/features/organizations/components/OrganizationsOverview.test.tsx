@@ -152,4 +152,48 @@ describe('OrganizationsOverview', () => {
       'Ce nom d’organisation est déjà utilisé.',
     );
   });
+
+  it('lets a volunteer leave an organization from the list', async () => {
+    logInAs('VOLUNTEER');
+    const fetch = stubApi({ mine: [{ ...bde, role: 'VOLUNTEER' }] });
+    renderOverview();
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Quitter BDE Nancy' }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+
+    await vi.waitFor(() =>
+      expect(
+        fetch.mock.calls.some(
+          ([url, init]) =>
+            url === '/api/organizations/o1/leave' && init?.method === 'POST',
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it('translates the refusal when the creator cannot leave yet', async () => {
+    logInAs('ORGANIZER');
+    stubApi({
+      mine: [{ ...bde, role: 'MANAGER' }],
+      post: () =>
+        new Response(
+          JSON.stringify({
+            message: 'The creator cannot leave while co-managers remain',
+          }),
+          { status: 409 },
+        ),
+    });
+    renderOverview();
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Quitter BDE Nancy' }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /co-gestionnaires/,
+    );
+  });
 });

@@ -58,7 +58,17 @@ function EventsList({ organizationId }: { organizationId?: string }) {
         </p>
       )}
       {error && <p className="alert-error">Erreur : {error}</p>}
-      {!error && !events && <p className="text-muted">Chargement...</p>}
+      {!error && !events && (
+        <div
+          aria-busy="true"
+          className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-5"
+        >
+          <p className="sr-only">Chargement...</p>
+          <div className="skeleton h-72" />
+          <div className="skeleton h-72" />
+          <div className="skeleton h-72" />
+        </div>
+      )}
       {events?.length === 0 && (
         <p className="card text-muted">
           Aucun événement à venir pour le moment.

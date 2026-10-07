@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
-import type { SyntheticEvent } from 'react';
+import type { CSSProperties, SyntheticEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import TextField from '../../../components/TextField.tsx';
 import { useSubmit } from '../../auth/hooks/useSubmit.ts';
 import { getMyOrganizations } from '../../organizations/api.ts';
 import type { MyOrganization } from '../../organizations/types.ts';
 import { createEvent } from '../api.ts';
-import { CATEGORY_LABELS, EVENT_CATEGORIES } from '../types.ts';
+import EventPreview from './EventPreview.tsx';
+import {
+  CATEGORY_LABELS,
+  CATEGORY_STYLES,
+  EVENT_CATEGORIES,
+} from '../types.ts';
 import type { EventCategory } from '../types.ts';
 
 export default function CreateEventForm() {
@@ -78,7 +83,7 @@ export default function CreateEventForm() {
   if (!managed) return <p className="text-muted">Chargement...</p>;
   if (managed.length === 0) {
     return (
-      <div className="alert-note min-w-0 flex-[999_1_520px] space-y-3 p-7 text-base">
+      <div className="alert-note max-w-2xl space-y-3 p-7 text-base">
         <p className="font-semibold">
           Vous ne gérez aucune organisation pour l'instant.
         </p>
@@ -95,116 +100,163 @@ export default function CreateEventForm() {
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="card min-w-0 flex-[999_1_520px] space-y-5 p-6 sm:p-7"
-    >
-      <fieldset className="space-y-2">
-        <legend className="mb-1 text-sm font-medium">
-          Organisations qui participent
-        </legend>
-        {managed.map(({ id, name }) => (
-          <label key={id} className="flex min-h-11 items-center gap-2">
-            <input
-              type="checkbox"
-              checked={selected.includes(id)}
-              onChange={() => toggle(id)}
-              className="size-5 accent-brand"
+    <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <form onSubmit={onSubmit} className="card space-y-8 p-6 sm:p-7">
+        <section className="space-y-5">
+          <h2 className="text-lg font-semibold">L'essentiel</h2>
+          <TextField
+            label="Titre"
+            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <label className="field-label">
+            <span>Description</span>
+            <textarea
+              required
+              rows={5}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="field"
             />
-            {name}
           </label>
-        ))}
-      </fieldset>
-      <TextField
-        label="Titre"
-        required
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-      />
-      <label className="field-label">
-        <span>Description</span>
-        <textarea
-          required
-          rows={5}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="field"
-        />
-      </label>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
-          label="Début"
-          type="datetime-local"
-          required
-          value={startsAt}
-          onChange={(e) => setStartsAt(e.target.value)}
-        />
-        <TextField
-          label="Fin"
-          type="datetime-local"
-          required
-          min={startsAt || undefined}
-          value={endsAt}
-          onChange={(e) => setEndsAt(e.target.value)}
-        />
-      </div>
-      <TextField
-        label="Lieu"
-        required
-        value={location}
-        onChange={(e) => setLocation(e.target.value)}
-      />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
-          label="Capacité"
-          type="number"
-          required
-          min={1}
-          step={1}
-          value={capacity}
-          onChange={(e) => setCapacity(e.target.value)}
-        />
-        <label className="field-label">
-          <span>Catégorie</span>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value as EventCategory)}
-            className="field"
+          <fieldset className="space-y-2">
+            <legend className="mb-1 text-sm font-medium">Catégorie</legend>
+            <div className="flex flex-wrap gap-2">
+              {EVENT_CATEGORIES.map((c) => (
+                <label
+                  key={c}
+                  className="chip has-[:checked]:border-(--ink) has-[:checked]:bg-(--tint) has-[:checked]:text-(--ink)"
+                  style={
+                    {
+                      '--tint': CATEGORY_STYLES[c].tint,
+                      '--ink': CATEGORY_STYLES[c].ink,
+                    } as CSSProperties
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="category"
+                    value={c}
+                    checked={category === c}
+                    onChange={() => setCategory(c)}
+                    className="sr-only"
+                  />
+                  {CATEGORY_LABELS[c]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </section>
+
+        <section className="space-y-5 border-t border-line-soft pt-6">
+          <h2 className="text-lg font-semibold">Date et lieu</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TextField
+              label="Début"
+              type="datetime-local"
+              required
+              value={startsAt}
+              onChange={(e) => setStartsAt(e.target.value)}
+            />
+            <TextField
+              label="Fin"
+              type="datetime-local"
+              required
+              min={startsAt || undefined}
+              value={endsAt}
+              onChange={(e) => setEndsAt(e.target.value)}
+            />
+          </div>
+          <TextField
+            label="Lieu"
+            required
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+          />
+        </section>
+
+        <section className="space-y-5 border-t border-line-soft pt-6">
+          <h2 className="text-lg font-semibold">Public et organisation</h2>
+          <div className="relative max-w-xs">
+            <TextField
+              label="Capacité"
+              type="number"
+              required
+              min={1}
+              step={1}
+              value={capacity}
+              onChange={(e) => setCapacity(e.target.value)}
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute right-10 bottom-2.5 text-sm text-muted"
+            >
+              places
+            </span>
+          </div>
+          <fieldset className="space-y-2">
+            <legend className="mb-1 text-sm font-medium">
+              Organisations qui participent
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {managed.map(({ id, name }) => (
+                <label key={id} className="chip">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(id)}
+                    onChange={() => toggle(id)}
+                    className="sr-only"
+                  />
+                  {name}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <TextField
+            label="Image (URL, facultatif)"
+            type="url"
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+          />
+        </section>
+
+        {error && (
+          <p role="alert" className="alert-error">
+            {error}
+          </p>
+        )}
+        <div className="flex flex-col gap-3 border-t border-line-soft pt-6 sm:flex-row">
+          <button
+            type="submit"
+            disabled={pending}
+            className="btn btn-primary min-h-12 px-5"
           >
-            {EVENT_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {CATEGORY_LABELS[c]}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <TextField
-        label="Image (URL, facultatif)"
-        type="url"
-        value={imageUrl}
-        onChange={(e) => setImageUrl(e.target.value)}
-      />
-      {error && (
-        <p role="alert" className="alert-error">
-          {error}
+            {pending ? 'Création...' : "Créer l'événement"}
+          </button>
+          <Link
+            to="/events"
+            className="btn btn-secondary min-h-12 px-5 font-normal"
+          >
+            Annuler
+          </Link>
+        </div>
+      </form>
+
+      <aside className="space-y-4 lg:sticky lg:top-6">
+        <p className="text-sm font-medium">Aperçu dans la liste</p>
+        <EventPreview
+          title={title}
+          category={category}
+          startsAt={startsAt}
+          location={location}
+          capacity={Number(capacity)}
+        />
+        <p className="alert-note">
+          Les créneaux bénévoles se configurent après la création, depuis le
+          dashboard.
         </p>
-      )}
-      <div className="flex flex-wrap gap-3 pt-1">
-        <button
-          type="submit"
-          disabled={pending}
-          className="btn btn-primary min-h-12 px-5"
-        >
-          {pending ? 'Création...' : "Créer l'événement"}
-        </button>
-        <Link
-          to="/events"
-          className="btn btn-secondary min-h-12 px-5 font-normal"
-        >
-          Annuler
-        </Link>
-      </div>
-    </form>
+      </aside>
+    </div>
   );
 }

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useSubmit } from '../../auth/hooks/useSubmit.ts';
 import { useAuth } from '../../auth/useAuth.ts';
-import { reserveTicket } from '../api.ts';
+import { getMyTickets, reserveTicket } from '../api.ts';
 import type { Ticket } from '../types.ts';
 import TicketQrCode from './TicketQrCode.tsx';
 
@@ -17,7 +17,10 @@ const ERROR_MESSAGES: Record<string, string> = {
 export default function ReserveButton({ eventId }: { eventId: string }) {
   const { user } = useAuth();
   const [confirming, setConfirming] = useState(false);
-  const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [ticket, setTicket] = useState<Pick<Ticket, 'code'> | null>(null);
+  // undefined while we look for a ticket already held: booking waits for the answer
+  const [held, setHeld] = useState<Pick<Ticket, 'code'> | null | undefined>();
+  const isParticipant = user?.role === 'PARTICIPANT';
   const { submit, pending, error } = useSubmit(async () => {
     try {
       setTicket(await reserveTicket(eventId));
@@ -25,6 +28,16 @@ export default function ReserveButton({ eventId }: { eventId: string }) {
       setConfirming(false);
     }
   });
+
+  useEffect(() => {
+    if (!isParticipant) return;
+    getMyTickets()
+      .then((mine) =>
+        setHeld(mine.find(({ event }) => event.id === eventId) ?? null),
+      )
+      // the API refuses a duplicate booking anyway
+      .catch(() => setHeld(null));
+  }, [eventId, isParticipant]);
 
   if (!user) {
     return (
@@ -36,16 +49,17 @@ export default function ReserveButton({ eventId }: { eventId: string }) {
   // organizers and volunteers have no ticket: the API refuses them
   if (user.role !== 'PARTICIPANT') return null;
 
-  if (ticket) {
+  const booked = ticket ?? held;
+  if (booked) {
     return (
       <div className="space-y-3">
         <p role="status" className="rounded-[10px] bg-ok-bg p-4 text-ok-ink">
           Votre place est réservée. Votre code :{' '}
           <strong className="font-mono text-xl tracking-wide">
-            {ticket.code}
+            {booked.code}
           </strong>
         </p>
-        <TicketQrCode code={ticket.code} />
+        <TicketQrCode code={booked.code} />
         <Link to="/me/tickets" className="btn btn-secondary">
           Voir mes billets
         </Link>
@@ -86,6 +100,7 @@ export default function ReserveButton({ eventId }: { eventId: string }) {
         <button
           type="button"
           onClick={() => setConfirming(true)}
+          disabled={held === undefined}
           className="btn btn-primary w-full"
         >
           Réserver

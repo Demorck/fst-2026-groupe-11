@@ -34,45 +34,48 @@ export default function RootLayout() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-line bg-white">
-        <nav className="mx-auto flex max-w-[1120px] flex-wrap items-center gap-x-7 gap-y-1 px-4 py-2 sm:px-6">
+        {/* Two rows below xl (brand and account, then the links), one row from xl on */}
+        <nav className="mx-auto flex max-w-[1120px] flex-wrap items-center gap-x-6 px-4 sm:px-6">
           <Link
             to="/"
-            className="font-display text-[22px] font-bold text-ink hover:text-ink"
+            className="py-2 font-display text-xl font-bold text-ink hover:text-ink"
           >
             G-Event
           </Link>
-          <NavLink to="/" end className={navClass}>
-            Événements
-          </NavLink>
-          {session?.user.role === 'ORGANIZER' && (
-            <>
-              <NavLink to="/events/new" className={navClass}>
-                Créer un événement
-              </NavLink>
-              <NavLink to="/dashboard" className={navClass}>
-                Dashboard
-              </NavLink>
-            </>
-          )}
-          {session && (
-            <NavLink to="/me/tickets" className={navClass}>
-              Mes billets
+          <div className="order-last -mx-4 flex w-[calc(100%+2rem)] gap-5 overflow-x-auto px-4 whitespace-nowrap sm:-mx-6 sm:w-[calc(100%+3rem)] sm:px-6 xl:order-none xl:mx-0 xl:w-auto xl:overflow-visible xl:px-0">
+            <NavLink to="/" end className={navClass}>
+              Événements
             </NavLink>
-          )}
-          {inOrganizations && (
-            <NavLink to="/organizations" className={navClass}>
-              Mes organisations
-              {pendingInvitations > 0 && (
-                <span
-                  aria-label={`${pendingInvitations} invitation(s) en attente`}
-                  className="ml-1.5 rounded-full bg-brand px-1.5 py-0.5 text-xs font-semibold text-white"
-                >
-                  {pendingInvitations}
-                </span>
-              )}
-            </NavLink>
-          )}
-          <div className="ml-auto flex items-center gap-3 text-sm">
+            {session?.user.role === 'ORGANIZER' && (
+              <>
+                <NavLink to="/events/new" className={navClass}>
+                  Créer un événement
+                </NavLink>
+                <NavLink to="/dashboard" className={navClass}>
+                  Dashboard
+                </NavLink>
+              </>
+            )}
+            {session && (
+              <NavLink to="/me/tickets" className={navClass}>
+                Mes billets
+              </NavLink>
+            )}
+            {inOrganizations && (
+              <NavLink to="/organizations" className={navClass}>
+                Mes organisations
+                {pendingInvitations > 0 && (
+                  <span
+                    aria-label={`${pendingInvitations} invitation(s) en attente`}
+                    className="ml-1.5 rounded-full bg-brand px-1.5 py-0.5 text-xs font-semibold text-white"
+                  >
+                    {pendingInvitations}
+                  </span>
+                )}
+              </NavLink>
+            )}
+          </div>
+          <div className="ml-auto flex items-center gap-3 py-2 text-sm">
             {session ? (
               <>
                 <span
@@ -83,23 +86,21 @@ export default function RootLayout() {
                 </span>
                 <NavLink
                   to="/profile"
+                  title={ROLE_LABELS[session.user.role]}
                   className="font-medium text-ink hover:text-brand"
                 >
                   {session.user.name}
                 </NavLink>
-                <span className="hidden text-muted sm:inline">
-                  {ROLE_LABELS[session.user.role]}
-                </span>
                 <button
                   type="button"
                   onClick={logout}
-                  className="btn btn-secondary"
+                  className="btn btn-secondary btn-sm"
                 >
                   Déconnexion
                 </button>
               </>
             ) : (
-              <NavLink to="/login" className="btn btn-primary">
+              <NavLink to="/login" className="btn btn-primary btn-sm">
                 Connexion
               </NavLink>
             )}

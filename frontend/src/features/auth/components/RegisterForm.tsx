@@ -7,6 +7,12 @@ import { useSubmit } from '../hooks/useSubmit.ts';
 import { ROLES, ROLE_LABELS } from '../types.ts';
 import type { Role } from '../types.ts';
 
+const ROLE_HINTS: Record<Role, string> = {
+  PARTICIPANT: 'Je réserve des places aux événements.',
+  VOLUNTEER: "Je rejoins des organisations et m'inscris sur des créneaux.",
+  ORGANIZER: 'Je crée des organisations et des événements.',
+};
+
 export default function RegisterForm() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -49,20 +55,28 @@ export default function RegisterForm() {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
-      <label className="field-label">
-        <span>Rôle</span>
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value as Role)}
-          className="field"
-        >
+      <fieldset className="space-y-2">
+        <legend className="mb-1 text-sm font-medium">Rôle</legend>
+        <div className="grid gap-2">
           {ROLES.map((r) => (
-            <option key={r} value={r}>
-              {ROLE_LABELS[r]}
-            </option>
+            <label
+              key={r}
+              className="flex min-h-11 cursor-pointer flex-col rounded-lg border border-field bg-white px-4 py-2.5 has-[:checked]:border-brand has-[:checked]:bg-brand-tint/60 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand"
+            >
+              <input
+                type="radio"
+                name="role"
+                value={r}
+                checked={role === r}
+                onChange={() => setRole(r)}
+                className="sr-only"
+              />
+              <span className="font-semibold">{ROLE_LABELS[r]}</span>
+              <span className="text-sm text-muted">{ROLE_HINTS[r]}</span>
+            </label>
           ))}
-        </select>
-      </label>
+        </div>
+      </fieldset>
       {error && (
         <p role="alert" className="alert-error">
           {error}

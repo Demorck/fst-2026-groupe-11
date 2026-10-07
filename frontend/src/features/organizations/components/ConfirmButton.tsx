@@ -29,7 +29,7 @@ export default function ConfirmButton({
     );
   }
   return (
-    <span className="inline-flex items-center gap-2">
+    <span className="inline-flex flex-wrap items-center gap-2">
       <span className="text-sm">{question}</span>
       <button
         type="button"

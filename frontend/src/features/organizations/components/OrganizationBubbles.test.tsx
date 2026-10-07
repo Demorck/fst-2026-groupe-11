@@ -16,10 +16,10 @@ const org = (
   updatedAt: '2026-10-07T10:00:00.000Z',
 });
 
-const renderBubbles = (organizations: OrganizationSummary[]) =>
+const renderBubbles = (organizations: OrganizationSummary[], max?: number) =>
   render(
     <MemoryRouter>
-      <OrganizationBubbles organizations={organizations} />
+      <OrganizationBubbles organizations={organizations} max={max} />
     </MemoryRouter>,
   );
 
@@ -56,6 +56,26 @@ describe('OrganizationBubbles', () => {
       '/api/organizations/o1/logo?v=2026-10-07T10%3A00%3A00.000Z',
     );
     expect(screen.getByText('CS')).toBeInTheDocument();
+  });
+
+  it('shows at most max bubbles and counts the others', () => {
+    renderBubbles(
+      ['A', 'B', 'C', 'D', 'E'].map((name) => org(`o${name}`, name, false)),
+      3,
+    );
+
+    expect(screen.getAllByRole('link')).toHaveLength(3);
+    const more = screen.getByText('+2 organisations');
+    expect(more).toHaveAttribute('title', 'D, E');
+  });
+
+  it('uses the singular for a single hidden organization', () => {
+    renderBubbles(
+      ['A', 'B', 'C', 'D'].map((name) => org(`o${name}`, name, false)),
+      3,
+    );
+
+    expect(screen.getByText('+1 organisation')).toBeInTheDocument();
   });
 
   it('renders nothing without organization', () => {

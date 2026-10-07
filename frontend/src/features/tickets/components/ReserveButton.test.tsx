@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -17,14 +17,26 @@ const renderButton = () =>
     </MemoryRouter>,
   );
 
-const stubFetch = (response: Response) => {
-  const fetch = vi.fn().mockResolvedValue(response);
+/** `reserve` answers the booking (POST), `mine` the tickets already held (GET /me/tickets). */
+const stubFetch = (reserve: Response, mine: unknown[] = []) => {
+  const fetch = vi.fn((_url: string, init?: RequestInit) =>
+    Promise.resolve(
+      init?.method === 'POST' ? reserve : new Response(JSON.stringify(mine)),
+    ),
+  );
   vi.stubGlobal('fetch', fetch);
   return fetch;
 };
 
-const clickReserve = () =>
-  userEvent.click(screen.getByRole('button', { name: 'Réserver' }));
+const posts = (fetch: ReturnType<typeof stubFetch>) =>
+  fetch.mock.calls.filter(([, init]) => init?.method === 'POST');
+
+// The button waits for the lookup of an already held ticket
+const clickReserve = async () => {
+  const button = screen.getByRole('button', { name: 'Réserver' });
+  await waitFor(() => expect(button).toBeEnabled());
+  await userEvent.click(button);
+};
 const clickConfirm = () =>
   userEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
 
@@ -57,7 +69,7 @@ describe('ReserveButton', () => {
     await clickReserve();
 
     expect(screen.getByText(/Confirmer la réservation/)).toBeInTheDocument();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(posts(fetch)).toHaveLength(0);
   });
 
   it('goes back to the button when the confirmation is cancelled', async () => {
@@ -69,7 +81,7 @@ describe('ReserveButton', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
 
     expect(screen.getByRole('button', { name: 'Réserver' })).toBeVisible();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(posts(fetch)).toHaveLength(0);
   });
 
   it('books the place and shows the ticket code', async () => {
@@ -87,9 +99,8 @@ describe('ReserveButton', () => {
     expect(
       screen.getByRole('link', { name: 'Voir mes billets' }),
     ).toHaveAttribute('href', '/me/tickets');
-    const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
+    const [url] = posts(fetch)[0];
     expect(url).toBe('/api/events/e1/tickets');
-    expect(init.method).toBe('POST');
     expect(screen.queryByRole('button')).toBeNull();
   });
 
@@ -109,5 +120,30 @@ describe('ReserveButton', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(text);
     expect(screen.getByRole('button', { name: 'Réserver' })).toBeVisible();
+  });
+
+  it('shows the code and QR code of a ticket already held, without booking button', async () => {
+    logInAs('PARTICIPANT');
+    const fetch = stubFetch(new Response('{}'), [
+      { code: 'HELD1234', event: { id: 'e1' } },
+      { code: 'OTHER000', event: { id: 'e2' } },
+    ]);
+    renderButton();
+
+    expect(await screen.findByRole('status')).toHaveTextContent('HELD1234');
+    expect(
+      screen.getByRole('img', { name: 'QR code du billet HELD1234' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(posts(fetch)).toHaveLength(0);
+  });
+
+  it('keeps the booking button when the lookup of held tickets fails', async () => {
+    logInAs('PARTICIPANT');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    renderButton();
+
+    const button = screen.getByRole('button', { name: 'Réserver' });
+    await waitFor(() => expect(button).toBeEnabled());
   });
 });

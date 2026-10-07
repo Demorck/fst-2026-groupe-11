@@ -52,7 +52,7 @@
 
 @layer components {
   .page-title {
-    @apply font-display text-4xl leading-tight font-bold;
+    @apply font-display text-3xl leading-tight font-bold sm:text-4xl;
   }
   .page-subtitle {
     @apply mt-2 text-muted;
@@ -81,11 +81,31 @@
   .field {
     @apply block min-h-11 w-full rounded-lg border border-field bg-white px-3 py-2 text-base text-ink placeholder:text-muted aria-invalid:border-2 aria-invalid:border-danger;
   }
+  select.field {
+    @apply appearance-none bg-[length:1rem] bg-[position:right_0.75rem_center] bg-no-repeat pr-10;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23555a66' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
   .field-label {
     @apply block space-y-1.5 text-sm font-medium;
   }
   .field-error {
     @apply text-sm font-normal text-danger;
+  }
+
+  .btn-sm {
+    @apply min-h-9 px-3 text-sm;
+  }
+  .btn:active:not(:disabled) {
+    @apply scale-[0.98];
+  }
+
+  /* Pill that holds a radio or a checkbox: the whole pill is the click target */
+  .chip {
+    @apply inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-field bg-white px-4 text-sm font-medium has-[:checked]:border-brand has-[:checked]:bg-brand-tint has-[:checked]:text-brand-deep has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand;
+  }
+
+  .skeleton {
+    @apply rounded-xl bg-line-soft motion-safe:animate-pulse;
   }
 
   .badge {
@@ -110,6 +130,9 @@
 
   .progress {
     @apply h-1.5 w-full overflow-hidden rounded-full bg-line-soft;
+  }
+  .progress-warn .progress-bar {
+    @apply bg-warn-ink;
   }
   .progress-bar {
     @apply h-full rounded-full bg-brand;
