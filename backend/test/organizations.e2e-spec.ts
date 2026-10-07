@@ -220,7 +220,7 @@ describe('Organizations (e2e)', () => {
       });
     };
 
-    it('lets a manager cancel an invitation (204) and logs it', async () => {
+    it('lets a manager cancel an invitation and logs it', async () => {
       asManager();
       prisma.organizationMember.findFirst.mockResolvedValue({
         id: MEMBER,
@@ -233,7 +233,7 @@ describe('Organizations (e2e)', () => {
         .delete(`/api/organizations/${ORG}/invitations/${MEMBER}`)
         .set('Authorization', await as(Role.ORGANIZER));
 
-      expect(res.status).toBe(204);
+      expect(res.status).toBe(200);
       expect(prisma.organizationAuditLog.create).toHaveBeenCalled();
     });
 

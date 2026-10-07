@@ -562,12 +562,21 @@ describe('OrganizationsService', () => {
       const prisma = setup();
       asManager(prisma);
       prisma.organizationMember.findFirst.mockResolvedValue(pending(1));
+      prisma.organizationMember.update.mockResolvedValue({
+        id: 'm1',
+        status: MembershipStatus.CANCELLED,
+      });
 
-      await (await build(prisma)).cancelInvitation('o1', 'm1', 'boss');
+      const result = await (
+        await build(prisma)
+      ).cancelInvitation('o1', 'm1', 'boss');
+
+      expect(result).toEqual({ id: 'm1', status: MembershipStatus.CANCELLED });
 
       expect(prisma.organizationMember.update).toHaveBeenCalledWith({
         where: { id: 'm1' },
         data: { status: MembershipStatus.CANCELLED },
+        select: { id: true, status: true },
       });
       expect(prisma.organizationAuditLog.create.mock.calls[0][0].data).toEqual({
         organizationId: 'o1',

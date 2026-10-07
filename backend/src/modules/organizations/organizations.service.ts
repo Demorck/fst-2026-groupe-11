@@ -392,10 +392,11 @@ export class OrganizationsService {
     if (member.status !== MembershipStatus.PENDING) {
       throw new ConflictException('Not a pending invitation');
     }
-    await this.prisma.$transaction([
+    const [cancelled] = await this.prisma.$transaction([
       this.prisma.organizationMember.update({
         where: { id: memberId },
         data: { status: MembershipStatus.CANCELLED },
+        select: { id: true, status: true },
       }),
       this.prisma.organizationAuditLog.create({
         data: {
@@ -406,6 +407,7 @@ export class OrganizationsService {
         },
       }),
     ]);
+    return cancelled;
   }
 
   /** A manager removes a member. */

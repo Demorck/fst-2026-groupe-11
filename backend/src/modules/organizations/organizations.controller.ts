@@ -135,7 +135,6 @@ export class OrganizationsController {
   }
 
   @Delete(':id/invitations/:memberId')
-  @HttpCode(204)
   @Roles(Role.ORGANIZER)
   @ApiForbiddenResponse({
     description: "Réservé aux gestionnaires de l'organisation",
@@ -144,12 +143,12 @@ export class OrganizationsController {
   @ApiConflictResponse({
     description: "Ce n'est pas une invitation en attente",
   })
-  async cancelInvitation(
+  cancelInvitation(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('memberId', ParseUUIDPipe) memberId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    await this.organizations.cancelInvitation(id, memberId, user.id);
+    return this.organizations.cancelInvitation(id, memberId, user.id);
   }
 
   @Delete(':id/members/:memberId')
