@@ -50,6 +50,41 @@ describe('MyTickets', () => {
     expect(fetch.mock.calls[0][0]).toBe('/api/me/tickets');
   });
 
+  it('separates upcoming tickets from past ones, most recent past first', async () => {
+    const at = (days: number) =>
+      new Date(Date.now() + days * 864e5).toISOString();
+    const make = (id: string, title: string, days: number) => ({
+      ...ticket,
+      id,
+      code: id,
+      event: {
+        ...ticket.event,
+        id,
+        title,
+        startsAt: at(days),
+        endsAt: at(days),
+      },
+    });
+    stubFetch(
+      new Response(
+        JSON.stringify([
+          make('old', 'Vieux', -20),
+          make('recent', 'Récent', -2),
+          make('next', 'Prochain', 3),
+        ]),
+      ),
+    );
+    renderTickets();
+
+    await screen.findByRole('link', { name: 'Prochain' });
+    expect(
+      screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent),
+    ).toEqual(['À venir', 'Passés']);
+    expect(screen.getAllByRole('link').map((link) => link.textContent)).toEqual(
+      ['Prochain', 'Récent', 'Vieux'],
+    );
+  });
+
   it('shows when the attendance is already validated', async () => {
     stubFetch(
       new Response(
