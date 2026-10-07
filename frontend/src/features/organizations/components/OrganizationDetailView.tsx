@@ -30,11 +30,11 @@ function InviteForm({
   onInvited: () => Promise<void>;
 }) {
   const [email, setEmail] = useState('');
-  const [sent, setSent] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
   const { submit, pending, error } = useSubmit(async () => {
-    setSent(null);
+    setSent(false);
     await inviteMember(organizationId, email.trim());
-    setSent(email.trim());
+    setSent(true);
     setEmail('');
     await onInvited();
   });
@@ -65,7 +65,8 @@ function InviteForm({
       )}
       {sent && (
         <p role="status" className="text-green-700">
-          Invitation envoyée à {sent}.
+          Si cette adresse correspond à un compte bénévole ou organisateur, une
+          invitation a été envoyée.
         </p>
       )}
       <button
@@ -149,6 +150,13 @@ export default function OrganizationDetailView({
   if (!organization) return <p>Chargement...</p>;
 
   const manager = organization.role === 'MANAGER';
+  const iAmCreator = organization.members.some(
+    (m) => m.user.id === user?.id && m.isCreator,
+  );
+  const hasCoManagers = organization.members.some(
+    (m) =>
+      m.role === 'MANAGER' && m.status === 'ACCEPTED' && m.user.id !== user?.id,
+  );
 
   return (
     <div className="space-y-8">
@@ -172,18 +180,24 @@ export default function OrganizationDetailView({
             >
               Voir la page publique
             </Link>
-            <ConfirmButton
-              label="Quitter l'organisation"
-              question="Quitter cette organisation ?"
-              onConfirm={() =>
-                run(
-                  () => leaveOrganization(organizationId),
-                  async () => {
-                    await navigate('/organizations');
-                  },
-                )
-              }
-            />
+            {iAmCreator && hasCoManagers ? (
+              <span className="text-gray-600">
+                Retirez les co-gestionnaires pour pouvoir quitter l'organisation
+              </span>
+            ) : (
+              <ConfirmButton
+                label="Quitter l'organisation"
+                question="Quitter cette organisation ?"
+                onConfirm={() =>
+                  run(
+                    () => leaveOrganization(organizationId),
+                    async () => {
+                      await navigate('/organizations');
+                    },
+                  )
+                }
+              />
+            )}
           </p>
         </div>
       </div>
@@ -221,7 +235,7 @@ export default function OrganizationDetailView({
         </h2>
         <ul className="space-y-2">
           {organization.members.map(
-            ({ id, role, status, expired, user: member }) => (
+            ({ id, role, status, expired, isCreator, user: member }) => (
               <li
                 key={id}
                 className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-3"
@@ -240,16 +254,20 @@ export default function OrganizationDetailView({
                     {expired ? 'Invitation expirée' : STATUS_LABELS[status]}
                   </span>
                 )}
-                {manager && status === 'ACCEPTED' && member.id !== user?.id && (
-                  <ConfirmButton
-                    label="Retirer"
-                    ariaLabel={`Retirer ${member.name}`}
-                    question={`Retirer ${member.name} ?`}
-                    onConfirm={() =>
-                      run(() => removeMember(organizationId, id))
-                    }
-                  />
-                )}
+                {manager &&
+                  status === 'ACCEPTED' &&
+                  member.id !== user?.id &&
+                  !isCreator &&
+                  (role !== 'MANAGER' || iAmCreator) && (
+                    <ConfirmButton
+                      label="Retirer"
+                      ariaLabel={`Retirer ${member.name}`}
+                      question={`Retirer ${member.name} ?`}
+                      onConfirm={() =>
+                        run(() => removeMember(organizationId, id))
+                      }
+                    />
+                  )}
                 {manager && status === 'PENDING' && (
                   <ConfirmButton
                     label="Annuler l'invitation"

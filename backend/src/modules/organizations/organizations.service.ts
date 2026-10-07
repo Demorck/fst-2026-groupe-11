@@ -46,6 +46,12 @@ const isExpired = (invitedAt: Date) =>
   Date.now() - invitedAt.getTime() > INVITATION_TTL_MS;
 const validSince = () => new Date(Date.now() - INVITATION_TTL_MS);
 
+const INVITE_ANSWER = { sent: true };
+
+// The creator is the only member nobody invited
+const isCreator = ({ invitedById }: { invitedById: string | null }) =>
+  invitedById === null;
+
 @Injectable()
 export class OrganizationsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -143,17 +149,21 @@ export class OrganizationsService {
             ? SHOWN_TO_MANAGERS.includes(status)
             : status === MembershipStatus.ACCEPTED,
         )
-        .map(({ id: memberId, role, status, invitedAt, user }) => ({
-          id: memberId,
-          role,
-          status,
-          expired: status === MembershipStatus.PENDING && isExpired(invitedAt),
-          user: {
-            id: user.id,
-            name: user.name,
-            ...(manager && { email: user.email }),
-          },
-        })),
+        .map(
+          ({ id: memberId, role, status, invitedAt, invitedById, user }) => ({
+            id: memberId,
+            role,
+            status,
+            isCreator: isCreator({ invitedById }),
+            expired:
+              status === MembershipStatus.PENDING && isExpired(invitedAt),
+            user: {
+              id: user.id,
+              name: user.name,
+              ...(manager && { email: user.email }),
+            },
+          }),
+        ),
     };
   }
 
@@ -179,10 +189,8 @@ export class OrganizationsService {
     await this.assertManager(organizationId, inviterId);
 
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user) throw new NotFoundException('No account with this email');
-    if (user.role === Role.PARTICIPANT) {
-      throw new BadRequestException('Participants cannot join an organization');
-    }
+    // Same answer whoever the email belongs to, so it cannot be used to probe for accounts
+    if (!user || user.role === Role.PARTICIPANT) return INVITE_ANSWER;
     // An organizer joins as a co-manager, a volunteer as a volunteer
     const role =
       user.role === Role.ORGANIZER
@@ -197,13 +205,9 @@ export class OrganizationsService {
     const waiting =
       existing?.status === MembershipStatus.PENDING &&
       !isExpired(existing.invitedAt);
-    if (accepted || waiting) {
-      throw new ConflictException(
-        accepted ? 'Already a member' : 'Already invited',
-      );
-    }
+    if (accepted || waiting) return INVITE_ANSWER;
     // Declined, cancelled, expired, left or removed: the invitation goes again on the same row
-    return this.prisma.organizationMember.upsert({
+    await this.prisma.organizationMember.upsert({
       where,
       create: { organizationId, userId: user.id, role, invitedById: inviterId },
       update: {
@@ -212,8 +216,8 @@ export class OrganizationsService {
         invitedById: inviterId,
         invitedAt: new Date(),
       },
-      select: { id: true, role: true, status: true },
     });
+    return INVITE_ANSWER;
   }
 
   /** Public page of an organization: who they are and what they run next. */
@@ -416,7 +420,7 @@ export class OrganizationsService {
     memberId: string,
     actorId: string,
   ) {
-    await this.assertManager(organizationId, actorId);
+    const actor = await this.assertManager(organizationId, actorId);
     const member = await this.prisma.organizationMember.findFirst({
       where: { id: memberId, organizationId },
     });
@@ -425,6 +429,12 @@ export class OrganizationsService {
     }
     if (member.userId === actorId) {
       throw new BadRequestException('Use leave to quit an organization');
+    }
+    if (isCreator(member)) {
+      throw new ForbiddenException('The creator cannot be removed');
+    }
+    if (member.role === OrganizationRole.MANAGER && !isCreator(actor)) {
+      throw new ForbiddenException('Only the creator can remove a manager');
     }
     return this.endMembership(
       organizationId,
@@ -615,7 +625,11 @@ export class OrganizationsService {
 
     return this.prisma.$transaction(async (tx) => {
       const { count } = await tx.shiftAssignment.deleteMany({
-        where: { volunteerId, shift: { eventId } },
+        // Past shifts stay: they count for the hours and the attestation
+        where: {
+          volunteerId,
+          shift: { eventId, startsAt: { gt: new Date() } },
+        },
       });
       if (count === 0) {
         throw new NotFoundException('Not registered on this event');
@@ -640,25 +654,38 @@ export class OrganizationsService {
    */
   private async endMembership(
     organizationId: string,
-    member: { id: string; userId: string; role: OrganizationRole },
+    member: {
+      id: string;
+      userId: string;
+      role: OrganizationRole;
+      invitedById: string | null;
+    },
     status: MembershipStatus,
     actorId: string,
     action: OrganizationAction,
   ) {
-    if (member.role === OrganizationRole.MANAGER) {
-      const otherManagers = await this.prisma.organizationMember.count({
-        where: {
-          organizationId,
-          role: OrganizationRole.MANAGER,
-          status: MembershipStatus.ACCEPTED,
-          id: { not: member.id },
-        },
-      });
-      if (otherManagers === 0) {
-        throw new ConflictException('Last manager of the organization');
-      }
-    }
     return this.prisma.$transaction(async (tx) => {
+      if (member.role === OrganizationRole.MANAGER) {
+        // Managers leaving at the same time wait for each other, so the last one cannot slip through
+        await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${organizationId} FOR UPDATE`;
+        const otherManagers = await tx.organizationMember.count({
+          where: {
+            organizationId,
+            role: OrganizationRole.MANAGER,
+            status: MembershipStatus.ACCEPTED,
+            id: { not: member.id },
+          },
+        });
+        // The creator hands the organization over first, then may leave as its only manager
+        if (isCreator(member) && otherManagers > 0) {
+          throw new ConflictException(
+            'The creator cannot leave while co-managers remain',
+          );
+        }
+        if (!isCreator(member) && otherManagers === 0) {
+          throw new ConflictException('Last manager of the organization');
+        }
+      }
       // First, so that this organization no longer counts as one the member belongs to
       await tx.organizationMember.update({
         where: { id: member.id },
@@ -738,6 +765,7 @@ export class OrganizationsService {
     ) {
       throw new ForbiddenException('Not a manager of this organization');
     }
+    return member;
   }
 }
 

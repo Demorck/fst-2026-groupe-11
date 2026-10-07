@@ -43,6 +43,8 @@ export interface Member {
   id: string;
   role: OrganizationRole;
   status: MembershipStatus;
+  /** The one nobody invited: cannot be removed, and the only one who removes managers. */
+  isCreator: boolean;
   /** A pending invitation older than 7 days: to cancel or send again. */
   expired?: boolean;
   /** The e-mail is only sent to managers. */

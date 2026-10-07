@@ -120,9 +120,9 @@ export class OrganizationsController {
   @Post(':id/invitations')
   @Roles(Role.ORGANIZER)
   @ApiCreatedResponse({
-    description: 'Invitation envoyée, en attente de réponse',
+    description:
+      "Même réponse quel que soit l'e-mail : on ne révèle pas si un compte existe",
   })
-  @ApiConflictResponse({ description: 'Déjà membre ou déjà invité' })
   @ApiForbiddenResponse({
     description: "Réservé aux gestionnaires de l'organisation",
   })
@@ -157,7 +157,8 @@ export class OrganizationsController {
     description: 'Membre retiré ; nombre de créneaux à venir retirés avec lui',
   })
   @ApiForbiddenResponse({
-    description: "Réservé aux gestionnaires de l'organisation",
+    description:
+      'Réservé aux gestionnaires ; le créateur ne peut pas être retiré et seul le créateur retire un gestionnaire',
   })
   @ApiConflictResponse({
     description: "Dernier gestionnaire de l'organisation",
@@ -174,7 +175,8 @@ export class OrganizationsController {
   @HttpCode(200)
   @ApiOkResponse({ description: "Vous avez quitté l'organisation" })
   @ApiConflictResponse({
-    description: "Dernier gestionnaire de l'organisation",
+    description:
+      "Dernier gestionnaire de l'organisation, ou créateur tant qu'il reste des co-gestionnaires",
   })
   leave(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.organizations.leave(id, user.id);

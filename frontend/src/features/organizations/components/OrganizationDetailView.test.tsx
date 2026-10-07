@@ -21,6 +21,7 @@ const member = (
   id,
   role,
   status,
+  isCreator: false,
   user: { id: userId, name, email: `${userId}@x.fr` },
   ...extra,
 });
@@ -33,7 +34,8 @@ const detail = (role: 'MANAGER' | 'VOLUNTEER') => ({
   updatedAt: '2026-10-07T10:00:00.000Z',
   role,
   members: [
-    member('m1', 'u1', 'Océane', 'MANAGER', 'ACCEPTED'),
+    member('m1', 'u1', 'Océane', 'MANAGER', 'ACCEPTED', { isCreator: true }),
+    member('m5', 'u6', 'Camille', 'MANAGER', 'ACCEPTED'),
     member('m2', 'u2', 'Bastien', 'VOLUNTEER', 'ACCEPTED'),
     member('m3', 'u3', 'Basile', 'VOLUNTEER', 'PENDING'),
     member('m4', 'u4', 'Béatrice', 'VOLUNTEER', 'PENDING', { expired: true }),
@@ -195,7 +197,7 @@ describe('OrganizationDetailView', () => {
   });
 
   it('leaves the organization and goes back to the list', async () => {
-    logIn();
+    logIn({ ...SELF, id: 'u6', name: 'Camille' });
     const fetch = stubApi('MANAGER');
     const router = renderView();
     await screen.findByRole('heading', { name: 'BDE Nancy' });
@@ -210,8 +212,22 @@ describe('OrganizationDetailView', () => {
     expect(writes(fetch)[0][0]).toBe('/api/organizations/o1/leave');
   });
 
-  it('translates the refusal for the last manager', async () => {
+  it('keeps the creator from leaving while co-managers remain', async () => {
     logIn();
+    stubApi('MANAGER');
+    renderView();
+    await screen.findByRole('heading', { name: 'BDE Nancy' });
+
+    expect(
+      screen.queryByRole('button', { name: "Quitter l'organisation" }),
+    ).toBeNull();
+    expect(
+      screen.getByText(/Retirez les co-gestionnaires/),
+    ).toBeInTheDocument();
+  });
+
+  it('translates the refusal for the last manager', async () => {
+    logIn({ ...SELF, id: 'u6', name: 'Camille' });
     stubApi(
       'MANAGER',
       () =>
@@ -244,7 +260,10 @@ describe('OrganizationDetailView', () => {
     await userEvent.type(await screen.findByLabelText('E-mail'), 'b@x.fr');
     await userEvent.click(screen.getByRole('button', { name: 'Inviter' }));
 
-    expect(await screen.findByRole('status')).toHaveTextContent('b@x.fr');
+    // Same text whoever the email belongs to: the API does not tell
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Si cette adresse correspond à un compte',
+    );
     const [, init] = writes(fetch).find(([url]) =>
       url.endsWith('/invitations'),
     ) as [string, RequestInit];
@@ -256,9 +275,10 @@ describe('OrganizationDetailView', () => {
     stubApi(
       'MANAGER',
       () =>
-        new Response(JSON.stringify({ message: 'Already a member' }), {
-          status: 409,
-        }),
+        new Response(
+          JSON.stringify({ message: 'Not a manager of this organization' }),
+          { status: 403 },
+        ),
     );
     renderView();
 
@@ -266,8 +286,37 @@ describe('OrganizationDetailView', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Inviter' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Cette personne est déjà membre.',
+      'Seuls les gestionnaires peuvent faire cela.',
     );
+  });
+
+  it('offers to remove a co-manager, but not the creator, to the creator only', async () => {
+    logIn();
+    stubApi('MANAGER');
+    renderView();
+    await screen.findByRole('heading', { name: 'BDE Nancy' });
+
+    expect(
+      within(row('Camille')).getByRole('button', { name: /Retirer/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(row('Océane')).queryByRole('button', { name: /Retirer/ }),
+    ).toBeNull();
+  });
+
+  it('lets a co-manager remove volunteers, not the creator', async () => {
+    logIn({ ...SELF, id: 'u6', name: 'Camille' });
+    stubApi('MANAGER');
+    renderView();
+    await screen.findByRole('heading', { name: 'BDE Nancy' });
+
+    expect(
+      screen.getByRole('button', { name: 'Retirer Bastien' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retirer Océane' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Retirer Camille' }),
+    ).toBeNull();
   });
 
   it('uploads the logo as raw bytes with the file type', async () => {

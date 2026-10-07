@@ -40,6 +40,7 @@ function setup() {
     event: { findUnique: vi.fn(), findMany: vi.fn() },
     eventOrganization: { count: vi.fn(), findFirst: vi.fn() },
     shiftAssignment: { deleteMany: vi.fn(), findMany: vi.fn() },
+    $queryRaw: vi.fn(),
     $transaction: vi.fn(),
   };
   // Both forms: a callback receives the same mocks, an array is already a list of calls
@@ -133,30 +134,36 @@ describe('OrganizationsService', () => {
       ).toBe(OrganizationRole.MANAGER);
     });
 
-    it('refuses a participant', async () => {
+    // The answer is the same whoever the e-mail belongs to, so it cannot be used to probe for accounts
+    it('answers the same and invites nobody for a participant', async () => {
       const prisma = setup();
 
       await expect(
         invite(prisma, { id: 'u2', role: Role.PARTICIPANT }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).resolves.toEqual({ sent: true });
+      expect(prisma.organizationMember.upsert).not.toHaveBeenCalled();
     });
 
-    it('throws 404 for an unknown e-mail', async () => {
-      await expect(invite(setup(), null)).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+    it('answers the same and invites nobody for an unknown e-mail', async () => {
+      const prisma = setup();
+
+      await expect(invite(prisma, null)).resolves.toEqual({ sent: true });
+      expect(prisma.organizationMember.upsert).not.toHaveBeenCalled();
     });
 
     it.each([MembershipStatus.PENDING, MembershipStatus.ACCEPTED])(
-      'throws 409 when the user is already %s',
+      'answers the same and invites nobody when the user is already %s',
       async (status) => {
+        const prisma = setup();
+
         await expect(
           invite(
-            setup(),
+            prisma,
             { id: 'u2', role: Role.VOLUNTEER },
             { status, invitedAt: new Date() },
           ),
-        ).rejects.toBeInstanceOf(ConflictException);
+        ).resolves.toEqual({ sent: true });
+        expect(prisma.organizationMember.upsert).not.toHaveBeenCalled();
       },
     );
 
@@ -444,7 +451,10 @@ describe('OrganizationsService', () => {
 
       expect(result).toEqual({ removed: 2 });
       expect(prisma.shiftAssignment.deleteMany).toHaveBeenCalledWith({
-        where: { volunteerId: 'vol', shift: { eventId: 'e1' } },
+        where: {
+          volunteerId: 'vol',
+          shift: { eventId: 'e1', startsAt: { gt: expect.any(Date) } },
+        },
       });
       expect(prisma.organizationAuditLog.create).toHaveBeenCalledWith({
         data: {
@@ -710,33 +720,126 @@ describe('OrganizationsService', () => {
       });
     });
 
-    it.each([
-      [
-        'removing',
-        (service: OrganizationsService) =>
-          service.removeMember('o1', 'm1', 'boss'),
-      ],
-      [
-        'leaving',
-        (service: OrganizationsService) => service.leave('o1', 'boss2'),
-      ],
-    ])('refuses to lose the last manager by %s', async (_how, act) => {
+    it('refuses to lose the last manager by leaving, checked under a lock', async () => {
       const prisma = setup();
-      asManager(prisma);
-      const lastManager = {
+      prisma.organizationMember.findUnique.mockResolvedValue({
         id: 'm1',
         userId: 'boss2',
         role: OrganizationRole.MANAGER,
         status: MembershipStatus.ACCEPTED,
-      };
-      prisma.organizationMember.findFirst.mockResolvedValue(lastManager);
-      prisma.organizationMember.findUnique.mockResolvedValue(lastManager);
+      });
       prisma.organizationMember.count.mockResolvedValue(0);
 
-      await expect(act(await build(prisma))).rejects.toThrow(
+      await expect((await build(prisma)).leave('o1', 'boss2')).rejects.toThrow(
         'Last manager of the organization',
       );
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
       expect(prisma.organizationMember.update).not.toHaveBeenCalled();
+    });
+
+    describe('creator and co-managers', () => {
+      const comanager = {
+        id: 'm3',
+        userId: 'boss2',
+        role: OrganizationRole.MANAGER,
+        status: MembershipStatus.ACCEPTED,
+        invitedById: 'creator',
+      };
+      const asCreator = (prisma: ReturnType<typeof setup>) => {
+        prisma.organization.findUnique.mockResolvedValue({ id: 'o1' });
+        prisma.organizationMember.findUnique.mockResolvedValueOnce({
+          ...manager,
+          invitedById: null,
+        });
+      };
+
+      const creator = {
+        id: 'm1',
+        userId: 'creator',
+        role: OrganizationRole.MANAGER,
+        status: MembershipStatus.ACCEPTED,
+        invitedById: null,
+      };
+
+      it('keeps the creator from leaving while co-managers remain', async () => {
+        const prisma = setup();
+        prisma.organizationMember.findUnique.mockResolvedValue(creator);
+        prisma.organizationMember.count.mockResolvedValue(1);
+
+        await expect(
+          (await build(prisma)).leave('o1', 'creator'),
+        ).rejects.toThrow('The creator cannot leave while co-managers remain');
+        expect(prisma.organizationMember.update).not.toHaveBeenCalled();
+      });
+
+      it('lets the creator leave once no co-manager is left', async () => {
+        const prisma = setup();
+        prisma.organizationMember.findUnique.mockResolvedValue(creator);
+        prisma.organizationMember.count.mockResolvedValue(0);
+        prisma.shiftAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+        await expect(
+          (await build(prisma)).leave('o1', 'creator'),
+        ).resolves.toEqual({ removedShifts: 0 });
+        expect(prisma.organizationMember.update).toHaveBeenCalledWith({
+          where: { id: 'm1' },
+          data: { status: MembershipStatus.LEFT },
+        });
+      });
+
+      it('never removes the creator', async () => {
+        const prisma = setup();
+        asManager(prisma);
+        prisma.organizationMember.findFirst.mockResolvedValue({
+          ...comanager,
+          id: 'm1',
+          userId: 'creator',
+          invitedById: null,
+        });
+
+        await expect(
+          (await build(prisma)).removeMember('o1', 'm1', 'boss2'),
+        ).rejects.toThrow('The creator cannot be removed');
+        expect(prisma.organizationMember.update).not.toHaveBeenCalled();
+      });
+
+      it('does not let a co-manager remove another manager', async () => {
+        const prisma = setup();
+        asManager(prisma);
+        prisma.organizationMember.findFirst.mockResolvedValue(comanager);
+
+        await expect(
+          (await build(prisma)).removeMember('o1', 'm3', 'boss'),
+        ).rejects.toThrow('Only the creator can remove a manager');
+        expect(prisma.organizationMember.update).not.toHaveBeenCalled();
+      });
+
+      it('lets a co-manager remove a volunteer', async () => {
+        const prisma = setup();
+        asManager(prisma);
+        prisma.organizationMember.findFirst.mockResolvedValue(volunteer);
+        prisma.shiftAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+        await expect(
+          (await build(prisma)).removeMember('o1', 'm2', 'boss'),
+        ).resolves.toEqual({ removedShifts: 0 });
+      });
+
+      it('lets the creator remove a co-manager', async () => {
+        const prisma = setup();
+        asCreator(prisma);
+        prisma.organizationMember.findFirst.mockResolvedValue(comanager);
+        prisma.organizationMember.count.mockResolvedValue(1);
+        prisma.shiftAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+        await expect(
+          (await build(prisma)).removeMember('o1', 'm3', 'creator'),
+        ).resolves.toEqual({ removedShifts: 0 });
+        expect(prisma.organizationMember.update).toHaveBeenCalledWith({
+          where: { id: 'm3' },
+          data: { status: MembershipStatus.REMOVED },
+        });
+      });
     });
 
     it('lets a manager leave when another manager remains', async () => {
