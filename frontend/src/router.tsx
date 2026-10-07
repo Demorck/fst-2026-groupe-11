@@ -31,7 +31,7 @@ export const router = createBrowserRouter([
         ],
       },
       {
-        element: <RequireAuth roles={['PARTICIPANT']} />,
+        element: <RequireAuth />,
         children: [{ path: 'me/tickets', element: <MyTicketsPage /> }],
       },
       {

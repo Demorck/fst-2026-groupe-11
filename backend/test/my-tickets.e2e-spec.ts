@@ -41,7 +41,7 @@ describe('GET /me/tickets (e2e)', () => {
       : req;
   };
 
-  it('returns the tickets of the logged in participant', async () => {
+  it('returns the tickets of the logged in user', async () => {
     const res = await get(Role.PARTICIPANT);
 
     expect(res.status).toBe(200);
@@ -53,7 +53,7 @@ describe('GET /me/tickets (e2e)', () => {
     expect((await get()).status).toBe(401);
   });
 
-  it('rejects a non-participant', async () => {
-    expect((await get(Role.ORGANIZER)).status).toBe(403);
+  it.each([Role.ORGANIZER, Role.VOLUNTEER])('accepts a %s', async (role) => {
+    expect((await get(role)).status).toBe(200);
   });
 });

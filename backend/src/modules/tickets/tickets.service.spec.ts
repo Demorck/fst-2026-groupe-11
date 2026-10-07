@@ -157,8 +157,8 @@ describe('TicketsService.reserve', () => {
   });
 });
 
-describe('TicketsService.listForParticipant', () => {
-  it('lists the active tickets of the participant, upcoming events first', async () => {
+describe('TicketsService.listForUser', () => {
+  it('lists the active tickets of the user ordered by event start', async () => {
     const findMany = vi.fn().mockResolvedValue([{ id: 't1' }]);
     const module = await Test.createTestingModule({
       providers: [
@@ -167,9 +167,7 @@ describe('TicketsService.listForParticipant', () => {
       ],
     }).compile();
 
-    const result = await module
-      .get(TicketsService)
-      .listForParticipant(participantId);
+    const result = await module.get(TicketsService).listForUser(participantId);
 
     expect(result).toEqual([{ id: 't1' }]);
     const args = findMany.mock.calls[0][0];

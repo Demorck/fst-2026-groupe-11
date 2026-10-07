@@ -13,8 +13,8 @@ const MAX_CODE_ATTEMPTS = 3;
 export class TicketsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Active tickets of a participant, upcoming events first. */
-  listForParticipant(participantId: string) {
+  /** Active tickets of a user, ordered by event start. */
+  listForUser(participantId: string) {
     return this.prisma.ticket.findMany({
       where: { participantId, status: TicketStatus.RESERVED },
       orderBy: { event: { startsAt: 'asc' } },
