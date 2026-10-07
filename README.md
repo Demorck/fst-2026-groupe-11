@@ -19,7 +19,7 @@ Le détail fonctionnel est dans [PROJECT.md](PROJECT.md).
 ## Démarrage rapide
 
 ```bash
-npm run setup   # une seule fois : dépendances, backend/.env, Postgres, migrations
+npm run setup   # une seule fois : dépendances, backend/.env, Postgres, migrations, données de démo
 npm run env     # La première fois ou si .env.example a été modifié
 npm run dev     # Postgres + API + front dans un seul terminal (Ctrl+C arrête tout)
 ```
@@ -78,11 +78,12 @@ Plus de détails dans [backend/README.md](backend/README.md) et [frontend/README
 
 | Script                        | Rôle                                                                                                |
 |-------------------------------|-----------------------------------------------------------------------------------------------------|
-| `npm run setup`               | Installe tout, crée `backend/.env` depuis `.env.example`, démarre Postgres, applique les migrations |
+| `npm run setup`               | Installe tout, crée `backend/.env` depuis `.env.example`, démarre Postgres, applique les migrations, peuple la base |
 | `npm run dev`                 | Démarre Postgres puis l'API et le front en mode watch                                               |
 | `npm run dev:api` / `dev:web` | Démarre seulement l'API ou seulement le front                                                       |
 | `npm run db:up` / `db:down`   | Démarre / arrête Postgres                                                                           |
 | `npm run db:migrate`          | Applique les migrations existantes                                                                  |
+| `npm run db:seed`             | Peuple la base avec les données de démo (idempotent, peut être relancé à tout moment)               |
 | `npm run build`               | Build du back puis du front                                                                         |
 | `npm run lint`                | oxlint sur les deux projets                                                                         |
 | `npm run format`              | Prettier sur les deux projets                                                                       |
@@ -90,3 +91,29 @@ Plus de détails dans [backend/README.md](backend/README.md) et [frontend/README
 
 Pour modifier le schéma de la base : éditer `backend/prisma/schema.prisma` puis lancer
 `npm run prisma:migrate --prefix backend` (crée une nouvelle migration et régénère le client).
+
+## Données de démo
+
+`npm run db:seed` (lancé par `npm run setup`) crée des comptes et des données pour tester sans rien saisir. Mot de passe de tous les comptes : `password123` (démo locale uniquement). Le seed est idempotent et refuse de tourner avec `NODE_ENV=production`.
+
+| Compte (`@gevent.test`)                  | Rôle        | Pour tester                                                   |
+|------------------------------------------|-------------|---------------------------------------------------------------|
+| `orga`                                   | Organisateur | Propriétaire de presque tous les événements                    |
+| `orga2`                                  | Organisateur | Atelier code créatif et conférence cybersécurité (propriété)  |
+| `benevole1`, `benevole2`, `benevole3`    | Bénévole    | Créneaux couverts, partiellement couverts ou vides            |
+| `participant1` à `participant5`          | Participant | Billets réservés, annulés, validés (check-in) ou non          |
+| `participant6`                           | Participant | Aucun billet : pour essayer la réservation                    |
+
+| Événement                          | Particularité                                                                 |
+|------------------------------------|-------------------------------------------------------------------------------|
+| Soirée de rentrée (dans 7 jours)   | Capacité 100, un créneau d'accueil couvert                                    |
+| Tournoi de futsal (dans 14 jours)  | Trois créneaux : partiellement couvert, couvert, vide                         |
+| Conférence IA (dans 21 jours)      | **Complète** (capacité 2) : la réservation doit être refusée                  |
+| Atelier code créatif (dans 30 j.)  | Aucun billet, autre organisateur                                              |
+| Soirée jeux (dans 2 heures)        | Personne n'est encore validé : pour essayer le check-in, un billet annulé     |
+| Gala, tournoi de l'an dernier, conférence cybersécurité | Passés, billets validés ou non : historique pour la prédiction d'affluence |
+
+Pour repartir d'une base vierge : `cd backend && npx prisma migrate reset` (détruit les données locales), puis `npm run db:seed`.
+
+# Maquette
+https://claude.ai/artifact/HZNcp6ANdFbVzhMhKKMDzR#page-dcb81aee8d83

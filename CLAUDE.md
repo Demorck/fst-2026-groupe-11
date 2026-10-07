@@ -17,9 +17,21 @@
 - **IA** : seul `LLM_PROVIDER=mock` existe. Aucun appel à un vrai LLM, aucune clé API dans le dépôt.
 - **Hors périmètre** (PROJECT.md) : paiement réel, scan QR caméra, app mobile, emails/push réels, multi-organisation. Ne pas les implémenter, mocker si besoin.
 
+## Données de démo (seed)
+
+`backend/prisma/seed.ts` peuple la base pour tester sans rien saisir à la main : `npm run db:seed` (lancé aussi par `npm run setup`). Les comptes et jeux de données sont listés dans `README.md`.
+
+- **Dès qu'une tâche touche aux données en base** (nouveau modèle ou colonne, nouveau cas métier), étendre le seed **dans le même changement**, sans attendre qu'on le demande. Les nouvelles lignes doivent permettre d'essayer la fonctionnalité immédiatement.
+- **Couvrir les cas limites, pas seulement le cas nominal** : événement complet, billet déjà réservé ou annulé, événement passé ou à venir, créneau couvert ou vide, etc.
+- **Idempotent** : identifiants fixes (UUID, e-mails, codes) et `upsert`, jamais de `deleteMany` ni de `create` seul, pour pouvoir relancer le seed à tout moment. Dates relatives à `Date.now()` pour que les événements « à venir » le restent.
+- **Ne pas écraser ce qui a été testé** : `update: {}` pour l'état qu'un test modifie (statut d'un billet, check-in).
+- **Aucun secret réel** : un seul mot de passe de démo, déjà dans le seed. Le seed refuse de tourner avec `NODE_ENV=production`.
+- Mettre à jour le tableau des comptes et jeux de données du `README.md`, puis lancer `npm run db:seed` **deux fois** (la seconde ne doit rien casser) avant de conclure.
+- Si une migration rend le seed invalide (colonne `NOT NULL`, enum modifié), corriger le seed dans la même PR.
+
 ## Avant de conclure une tâche
 
-`npm run lint && npm test && npm run build` à la racine. Pour toucher à la base : `npm run db:up` d'abord.
+`npm run lint && npm test && npm run build` à la racine. Pour toucher à la base : `npm run db:up` d'abord, et `npm run db:seed` si les données changent (section précédente).
 
 ## Outils
 

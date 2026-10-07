@@ -18,7 +18,8 @@ Les modules de domaine existent déjà comme coquilles vides (`@Module({})`) et 
    - `<domaine>.controller.ts` : `@ApiTags('<domaine>')`, `@Controller('<domaine>')` (sans préfixe `api`).
 4. Déclarer `controllers` et `providers` dans `<domaine>.module.ts` ; exporter le service s'il sert à un autre module.
 5. Écrire `<domaine>.service.spec.ts` (cas métier de `.claude/rules/testing.md`).
-6. Lancer `npm run lint && npm test && npm run build`, puis vérifier la route dans Swagger (`/api/docs`).
+6. Compléter le seed (`backend/prisma/seed.ts`, règles dans `CLAUDE.md`, section « Données de démo ») pour pouvoir essayer la route sans saisie manuelle, cas limites compris.
+7. Lancer `npm run lint && npm test && npm run build`, puis vérifier la route dans Swagger (`/api/docs`).
 
 ## Gabarits (imports relatifs en `.js`)
 

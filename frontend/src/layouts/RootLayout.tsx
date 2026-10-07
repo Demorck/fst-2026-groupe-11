@@ -1,8 +1,14 @@
-import { NavLink, Outlet } from 'react-router';
-import { useSession } from '../features/auth/session.ts';
+import { NavLink, Outlet, useNavigate } from 'react-router';
+import { clearSession, useSession } from '../features/auth/session.ts';
 
 export default function RootLayout() {
   const session = useSession();
+  const navigate = useNavigate();
+
+  async function logout() {
+    clearSession();
+    await navigate('/');
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
@@ -11,11 +17,25 @@ export default function RootLayout() {
           <NavLink to="/" className="font-semibold">
             G-Event
           </NavLink>
-          <NavLink to="/dashboard">Dashboard</NavLink>
+          <NavLink to="/" end>
+            Événements
+          </NavLink>
+          {session?.user.role === 'ORGANIZER' && (
+            <>
+              <NavLink to="/events/new">Créer un événement</NavLink>
+              <NavLink to="/dashboard">Dashboard</NavLink>
+            </>
+          )}
+          {session && <NavLink to="/me/tickets">Mes billets</NavLink>}
           {session ? (
-            <NavLink to="/profile" className="ml-auto">
-              {session.user.name}
-            </NavLink>
+            <>
+              <NavLink to="/profile" className="ml-auto">
+                {session.user.name}
+              </NavLink>
+              <button type="button" onClick={logout}>
+                Déconnexion
+              </button>
+            </>
           ) : (
             <NavLink to="/login" className="ml-auto">
               Connexion
