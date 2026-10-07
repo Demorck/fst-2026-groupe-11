@@ -8,9 +8,13 @@ export const createEvent = (input: CreateEventInput) =>
   });
 
 /** Events starting from now, soonest first. */
-export const listUpcomingEvents = () =>
+export const listUpcomingEvents = (organizationId?: string) =>
   apiFetch<EventWithSeats[]>(
-    `/events?from=${encodeURIComponent(new Date().toISOString())}`,
+    `/events?from=${encodeURIComponent(new Date().toISOString())}${
+      organizationId
+        ? `&organizationId=${encodeURIComponent(organizationId)}`
+        : ''
+    }`,
   );
 
 export const getEvent = (id: string) =>

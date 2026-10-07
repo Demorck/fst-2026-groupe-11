@@ -2,11 +2,15 @@
 // Idempotent: ids, emails and ticket codes are fixed, so it can be run again at any time.
 // When a feature adds data to the database, extend this file (see CLAUDE.md, "Données de démo").
 import 'dotenv/config';
+import { crc32, deflateSync } from 'node:zlib';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as argon2 from 'argon2';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 import {
   EventCategory,
+  MembershipStatus,
+  OrganizationAction,
+  OrganizationRole,
   Role,
   TicketStatus,
 } from '../src/generated/prisma/enums.js';
@@ -49,6 +53,11 @@ const USERS = [
     role: Role.VOLUNTEER,
   },
   {
+    email: 'benevole4@gevent.test',
+    name: 'Béatrice Bénévole',
+    role: Role.VOLUNTEER,
+  },
+  {
     email: 'participant1@gevent.test',
     name: 'Paul Participant',
     role: Role.PARTICIPANT,
@@ -80,6 +89,99 @@ const USERS = [
     role: Role.PARTICIPANT,
   },
 ];
+
+// A plain PNG logo (colored square with a white disc), so logos can be seen without uploading one
+function logoPng(size: number, [r, g, b]: number[]) {
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const checksum = Buffer.alloc(4);
+    checksum.writeUInt32BE(crc32(body));
+    return Buffer.concat([length, body, checksum]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0);
+  header.writeUInt32BE(size, 4);
+  header[8] = 8; // bit depth
+  header[9] = 2; // RGB
+  const rows = Array.from({ length: size }, (_, y) => {
+    const row = Buffer.alloc(1 + size * 3); // first byte: filter type 0
+    for (let x = 0; x < size; x++) {
+      const inDisc = Math.hypot(x - size / 2, y - size / 2) < size * 0.28;
+      row.set(inDisc ? [255, 255, 255] : [r, g, b], 1 + x * 3);
+    }
+    return row;
+  });
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(Buffer.concat(rows))),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+const { MANAGER, VOLUNTEER } = OrganizationRole;
+const { ACCEPTED, PENDING, DECLINED, CANCELLED, REMOVED, LEFT } =
+  MembershipStatus;
+
+// Members: [user, role, status]. Covers: co-management, a pending and a declined invitation,
+// a volunteer in two organizations, and an organization without logo (initials are shown instead).
+const ORGANIZATIONS = [
+  {
+    key: 'bde',
+    name: 'BDE Nancy',
+    description: 'Le bureau des étudiants : soirées, rentrée et vie de campus.',
+    logoColor: [22, 163, 74],
+    members: [
+      ['orga', MANAGER, ACCEPTED],
+      ['orga2', MANAGER, PENDING], // co-manager invitation to accept
+      ['benevole1', VOLUNTEER, ACCEPTED],
+      ['benevole2', VOLUNTEER, ACCEPTED],
+      ['benevole3', VOLUNTEER, PENDING], // volunteer invitation to accept
+      ['benevole4', VOLUNTEER, LEFT], // left: her past hours stay on her attestation
+    ],
+  },
+  {
+    key: 'sport',
+    name: 'Club Sport Université',
+    description: 'Tournois et entraînements ouverts à tous.',
+    logoColor: [234, 88, 12],
+    members: [
+      ['orga', MANAGER, ACCEPTED],
+      ['benevole2', VOLUNTEER, ACCEPTED],
+      ['benevole3', VOLUNTEER, ACCEPTED],
+      ['benevole1', VOLUNTEER, REMOVED], // removed by orga: past hours stay too
+      ['benevole4', VOLUNTEER, CANCELLED], // invitation withdrawn
+    ],
+  },
+  {
+    key: 'num',
+    name: 'Association Numérique',
+    description: 'Ateliers de code et conférences sur le numérique.',
+    logoColor: null,
+    members: [
+      ['orga2', MANAGER, ACCEPTED],
+      ['benevole3', VOLUNTEER, DECLINED], // declined: can be invited again
+      ['benevole4', VOLUNTEER, PENDING], // invited 10 days ago: expired, to invite again
+    ],
+  },
+] as const;
+
+// Invitations older than the 7 days of validity (organization key and user key)
+const EXPIRED_INVITATIONS = new Set(['num:benevole4']);
+
+// Event number -> organizations running it. The futsal tournament has two (two bubbles on its card).
+const EVENT_ORGANIZATIONS: Record<number, string[]> = {
+  1: ['bde'],
+  2: ['bde', 'sport'],
+  3: ['bde'],
+  4: ['num'],
+  5: ['bde'],
+  6: ['bde'],
+  7: ['sport'],
+  8: ['num'],
+};
 
 const eventId = (n: number) =>
   `aaaaaaaa-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -173,6 +275,12 @@ const SHIFTS: [number, number, string, number, number, string[]][] = [
   [3, 2, 'Buvette', 3, 2 * HOUR, ['benevole1', 'benevole2', 'benevole3']], // covered
   [4, 2, 'Rangement', 2, 4 * HOUR, []], // nobody yet
   [5, 5, 'Accueil', 1, 0, ['benevole1']],
+  // Past shifts: hours and attestations (benevole1 and benevole4 have left or were removed, hours stay)
+  [6, 6, 'Accueil', 3, 0, ['benevole1', 'benevole2', 'benevole4']],
+  [7, 6, 'Rangement', 2, 3 * HOUR, ['benevole1', 'benevole4']],
+  [8, 7, 'Buvette', 2, 0, ['benevole1', 'benevole2']],
+  // Starts in a few hours and nobody yet: flagged as incomplete on the dashboard
+  [9, 5, 'Rangement', 2, 3 * HOUR, []],
 ];
 
 // [event number, participant, status, checked in]
@@ -217,6 +325,37 @@ async function main() {
   }
   const userId = (key: string) => users.get(key)!;
 
+  const organizations = new Map<string, string>();
+  for (const { key, members, logoColor, ...fields } of ORGANIZATIONS) {
+    const data = {
+      ...fields,
+      logo: logoColor ? new Uint8Array(logoPng(128, [...logoColor])) : null,
+      logoContentType: logoColor ? 'image/png' : null,
+    };
+    const organization = await prisma.organization.upsert({
+      where: { name: fields.name },
+      create: data,
+      update: data,
+    });
+    organizations.set(key, organization.id);
+    for (const [user, role, status] of members) {
+      const ids = { organizationId: organization.id, userId: userId(user) };
+      await prisma.organizationMember.upsert({
+        where: { organizationId_userId: ids },
+        create: {
+          ...ids,
+          role,
+          status,
+          ...(EXPIRED_INVITATIONS.has(`${key}:${user}`) && {
+            invitedAt: new Date(Date.now() - 10 * DAY),
+          }),
+        },
+        // Keeps the answer given while testing an invitation
+        update: { role },
+      });
+    }
+  }
+
   for (const { organizer, ...event } of EVENTS) {
     const data = {
       ...event,
@@ -228,6 +367,20 @@ async function main() {
       create: data,
       update: data,
     });
+  }
+
+  for (const [eventNumber, keys] of Object.entries(EVENT_ORGANIZATIONS)) {
+    for (const key of keys) {
+      const ids = {
+        eventId: eventId(Number(eventNumber)),
+        organizationId: organizations.get(key)!,
+      };
+      await prisma.eventOrganization.upsert({
+        where: { eventId_organizationId: ids },
+        create: ids,
+        update: {},
+      });
+    }
   }
 
   for (const [
@@ -288,8 +441,42 @@ async function main() {
     });
   }
 
+  // The audit log has no natural key: fixed ids keep a rerun from duplicating the entries
+  const auditId = (n: number) =>
+    `cccccccc-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const AUDIT = [
+    [1, 'sport', OrganizationAction.MEMBER_REMOVED, 'orga', 'benevole1', 12],
+    [2, 'bde', OrganizationAction.MEMBER_LEFT, 'benevole4', 'benevole4', 20],
+    [
+      3,
+      'sport',
+      OrganizationAction.INVITATION_CANCELLED,
+      'orga',
+      'benevole4',
+      3,
+    ],
+  ] as const;
+  for (const [n, org, action, actor, target, daysAgo] of AUDIT) {
+    const data = {
+      organizationId: organizations.get(org)!,
+      action,
+      actorId: userId(actor),
+      targetUserId: userId(target),
+      details:
+        action === OrganizationAction.INVITATION_CANCELLED
+          ? undefined
+          : { removedShifts: 0 },
+      createdAt: new Date(Date.now() - daysAgo * DAY),
+    };
+    await prisma.organizationAuditLog.upsert({
+      where: { id: auditId(n) },
+      create: { id: auditId(n), ...data },
+      update: {},
+    });
+  }
+
   console.log(
-    `Seed done: ${USERS.length} users, ${EVENTS.length} events, ${SHIFTS.length} shifts, ${TICKETS.length} tickets.`,
+    `Seed done: ${USERS.length} users, ${ORGANIZATIONS.length} organizations, ${EVENTS.length} events, ${SHIFTS.length} shifts, ${TICKETS.length} tickets.`,
   );
   console.log(
     `Demo accounts: <name>@gevent.test, password "${PASSWORD}" (see README.md).`,

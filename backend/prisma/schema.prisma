@@ -33,6 +33,9 @@ model User {
   shiftAssignments ShiftAssignment[]
   events    Event[]
   tickets   Ticket[]
+  memberships OrganizationMember[]
+  auditActions OrganizationAuditLog[] @relation("AuditActor")
+  auditTargets OrganizationAuditLog[] @relation("AuditTarget")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -51,6 +54,8 @@ model Event {
   organizer   User          @relation(fields: [organizerId], references: [id])
   tickets     Ticket[]
   shifts      Shift[]
+  // At least one organization manages an event (enforced by the service, a table constraint cannot count)
+  organizations EventOrganization[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -106,4 +111,90 @@ model ShiftAssignment {
 
   @@unique([shiftId, volunteerId])
   @@index([volunteerId])
+}
+
+enum OrganizationRole {
+  MANAGER
+  VOLUNTEER
+}
+
+enum MembershipStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  // Invitation withdrawn by a manager
+  CANCELLED
+  // Member removed by a manager, or who left: the row stays for the history (hours, attestation)
+  REMOVED
+  LEFT
+}
+
+enum OrganizationAction {
+  INVITATION_CANCELLED
+  MEMBER_REMOVED
+  MEMBER_LEFT
+  PARTICIPATION_REMOVED
+}
+
+model Organization {
+  id              String               @id @default(uuid())
+  name            String               @unique
+  description     String?
+  // Logo stored in the database; always `omit` it from list queries, it can weigh 512 KB
+  logo            Bytes?
+  logoContentType String?
+  members         OrganizationMember[]
+  events          EventOrganization[]
+  auditLog        OrganizationAuditLog[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+}
+
+// Membership and invitation in one row: PENDING until the invited user accepts.
+// A declined invitation keeps its row, so inviting again resets it to PENDING.
+model OrganizationMember {
+  id             String           @id @default(uuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation(fields: [userId], references: [id])
+  role           OrganizationRole
+  status         MembershipStatus @default(PENDING)
+  invitedById    String?
+  // Reset at every (re)invitation: a PENDING invitation older than 7 days is expired, computed on read
+  invitedAt      DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+model EventOrganization {
+  eventId        String
+  event          Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@id([eventId, organizationId])
+  @@index([organizationId])
+}
+
+// Who did what in an organization: removals and cancelled invitations. Never edited or deleted.
+model OrganizationAuditLog {
+  id             String             @id @default(uuid())
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  action         OrganizationAction
+  actorId        String
+  actor          User               @relation("AuditActor", fields: [actorId], references: [id])
+  targetUserId   String?
+  targetUser     User?              @relation("AuditTarget", fields: [targetUserId], references: [id])
+  // Plain id, no relation: the entry outlives a deleted event
+  eventId        String?
+  details        Json?
+  createdAt      DateTime           @default(now())
+
+  @@index([organizationId, createdAt])
 }

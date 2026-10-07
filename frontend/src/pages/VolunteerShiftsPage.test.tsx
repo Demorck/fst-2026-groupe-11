@@ -135,6 +135,31 @@ describe('VolunteerShiftsPage sign-up', () => {
     expect(init.method).toBe('POST');
   });
 
+  it('explains the refusal when the volunteer belongs to no organization of the event', async () => {
+    logInAs('VOLUNTEER');
+    const open = { ...shifts[0], assigned: false, registered: 1 };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(json([open]))
+        .mockResolvedValueOnce(
+          json(
+            { message: 'Not a volunteer of an organization of this event' },
+            403,
+          ),
+        )
+        .mockResolvedValueOnce(json([open])),
+    );
+    renderPage();
+
+    await userEvent.click(await join());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Vous n'êtes bénévole d'aucune organisation de cet événement.",
+    );
+  });
+
   it('signs out of my shift', async () => {
     logInAs('VOLUNTEER');
     const fetch = vi

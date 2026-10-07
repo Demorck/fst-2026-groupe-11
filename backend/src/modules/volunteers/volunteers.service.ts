@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service.js';
+import { OrganizationsService } from '../organizations/organizations.service.js';
 import { CreateShiftDto } from './dto/create-shift.dto.js';
 import { UpdateShiftDto } from './dto/update-shift.dto.js';
 
@@ -17,7 +18,10 @@ function assertValidPeriod(startsAt: Date, endsAt: Date) {
 
 @Injectable()
 export class VolunteersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly organizations: OrganizationsService,
+  ) {}
 
   async listShifts(eventId: string, userId: string) {
     const event = await this.prisma.event.findUnique({
@@ -26,7 +30,11 @@ export class VolunteersService {
     if (!event) {
       throw new NotFoundException('Event not found');
     }
-    const isOrganizer = event.organizerId === userId;
+    // A manager of one of the organizations running the event, not only its author
+    const isOrganizer = await this.organizations.canManageEvent(
+      userId,
+      eventId,
+    );
     const shifts = await this.prisma.shift.findMany({
       where: { eventId },
       orderBy: { startsAt: 'asc' },
@@ -53,8 +61,8 @@ export class VolunteersService {
     if (!event) {
       throw new NotFoundException('Event not found');
     }
-    if (event.organizerId !== userId) {
-      throw new ForbiddenException('Not the organizer of this event');
+    if (!(await this.organizations.canManageEvent(userId, eventId))) {
+      throw new ForbiddenException('Not a manager of this event');
     }
     return this.prisma.shift.create({ data: { ...dto, eventId } });
   }
@@ -63,10 +71,26 @@ export class VolunteersService {
     return this.prisma.$transaction(async (tx) => {
       // Lock the shift row: concurrent sign-ups run one at a time, so the full check cannot be overtaken
       const [shift] = await tx.$queryRaw<
-        { requiredVolunteers: number; startsAt: Date; endsAt: Date }[]
-      >`SELECT "requiredVolunteers", "startsAt", "endsAt" FROM "Shift" WHERE id = ${shiftId} FOR UPDATE`;
+        {
+          eventId: string;
+          requiredVolunteers: number;
+          startsAt: Date;
+          endsAt: Date;
+        }[]
+      >`SELECT "eventId", "requiredVolunteers", "startsAt", "endsAt" FROM "Shift" WHERE id = ${shiftId} FOR UPDATE`;
       if (!shift) {
         throw new NotFoundException('Shift not found');
+      }
+      // Volunteers only work for the organizations they belong to
+      if (
+        !(await this.organizations.isVolunteerOfEvent(
+          volunteerId,
+          shift.eventId,
+        ))
+      ) {
+        throw new ForbiddenException(
+          'Not a volunteer of an organization of this event',
+        );
       }
 
       const existing = await tx.shiftAssignment.findUnique({
@@ -106,7 +130,7 @@ export class VolunteersService {
   }
 
   async updateShift(id: string, dto: UpdateShiftDto, userId: string) {
-    const shift = await this.findOwnedShift(id, userId);
+    const shift = await this.findManagedShift(id, userId);
     // A partial update can break the order only against the stored date
     assertValidPeriod(
       dto.startsAt ?? shift.startsAt,
@@ -116,7 +140,7 @@ export class VolunteersService {
   }
 
   async removeShift(id: string, userId: string) {
-    await this.findOwnedShift(id, userId);
+    await this.findManagedShift(id, userId);
     // Assignments have no cascade in the schema, so they go first
     await this.prisma.$transaction([
       this.prisma.shiftAssignment.deleteMany({ where: { shiftId: id } }),
@@ -124,16 +148,16 @@ export class VolunteersService {
     ]);
   }
 
-  private async findOwnedShift(id: string, userId: string) {
+  private async findManagedShift(id: string, userId: string) {
     const shift = await this.prisma.shift.findUnique({
       where: { id },
-      include: { event: { select: { organizerId: true } } },
+      select: { eventId: true, startsAt: true, endsAt: true },
     });
     if (!shift) {
       throw new NotFoundException('Shift not found');
     }
-    if (shift.event.organizerId !== userId) {
-      throw new ForbiddenException('Not the organizer of this event');
+    if (!(await this.organizations.canManageEvent(userId, shift.eventId))) {
+      throw new ForbiddenException('Not a manager of this event');
     }
     return shift;
   }

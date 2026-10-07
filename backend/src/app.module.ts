@@ -6,6 +6,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { EventsModule } from './modules/events/events.module.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { OrganizationsModule } from './modules/organizations/organizations.module.js';
 import { TicketsModule } from './modules/tickets/tickets.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 import { VolunteersModule } from './modules/volunteers/volunteers.module.js';
@@ -18,6 +19,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
     AuthModule,
     UsersModule,
     EventsModule,
+    OrganizationsModule,
     TicketsModule,
     VolunteersModule,
     DashboardModule,

@@ -4,6 +4,29 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import CreateEventPage from './CreateEventPage.tsx';
 
+const bde = { id: 'o1', name: 'BDE', role: 'MANAGER' };
+const sport = { id: 'o2', name: 'Club Sport', role: 'MANAGER' };
+const volunteerOf = { id: 'o3', name: 'Autre asso', role: 'VOLUNTEER' };
+
+/** Answers `GET /organizations/mine`, and every other call with `answer`. */
+function stubApi(organizations: object[], answer: () => Response) {
+  const fetch = vi.fn((url: string) =>
+    Promise.resolve(
+      url === '/api/organizations/mine'
+        ? new Response(JSON.stringify(organizations))
+        : answer(),
+    ),
+  );
+  vi.stubGlobal('fetch', fetch);
+  return fetch;
+}
+
+const eventCalls = (fetch: ReturnType<typeof vi.fn>) =>
+  fetch.mock.calls.filter(([url]) => url === '/api/events') as [
+    string,
+    RequestInit,
+  ][];
+
 function renderPage() {
   const router = createMemoryRouter(
     [
@@ -17,6 +40,7 @@ function renderPage() {
 }
 
 async function fillForm(startsAt: string, endsAt: string) {
+  await screen.findByLabelText('Titre');
   await userEvent.type(screen.getByLabelText('Titre'), 'Gala');
   await userEvent.type(screen.getByLabelText('Description'), 'Soirée');
   // user-event can't type into datetime-local inputs in jsdom
@@ -34,10 +58,10 @@ const submit = () =>
 
 describe('CreateEventPage', () => {
   it('posts the event and redirects to its detail page', async () => {
-    const fetch = vi
-      .fn()
-      .mockResolvedValue(new Response(JSON.stringify({ id: 'e1' })));
-    vi.stubGlobal('fetch', fetch);
+    const fetch = stubApi(
+      [bde],
+      () => new Response(JSON.stringify({ id: 'e1' })),
+    );
     const router = renderPage();
 
     await fillForm('2026-12-01T19:00', '2026-12-01T23:00');
@@ -45,7 +69,7 @@ describe('CreateEventPage', () => {
 
     expect(await screen.findByText('Détail')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/events/e1');
-    const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
+    const [[url, init]] = eventCalls(fetch);
     expect(url).toBe('/api/events');
     expect(JSON.parse(init.body as string)).toEqual({
       title: 'Gala',
@@ -55,12 +79,71 @@ describe('CreateEventPage', () => {
       location: 'Nancy',
       capacity: 50,
       category: 'PARTY',
+      organizationIds: ['o1'],
     });
   });
 
+  it('sends every organization that is ticked', async () => {
+    const fetch = stubApi(
+      [bde, sport, volunteerOf],
+      () => new Response(JSON.stringify({ id: 'e1' })),
+    );
+    renderPage();
+
+    await fillForm('2026-12-01T19:00', '2026-12-01T23:00');
+    await userEvent.click(screen.getByRole('checkbox', { name: 'BDE' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Club Sport' }));
+    await submit();
+
+    await screen.findByText('Détail');
+    const [[, init]] = eventCalls(fetch);
+    expect(JSON.parse(init.body as string).organizationIds).toEqual([
+      'o1',
+      'o2',
+    ]);
+  });
+
+  it('only offers the organizations the user manages', async () => {
+    stubApi([bde, volunteerOf], () => new Response('{}'));
+    renderPage();
+
+    await screen.findByLabelText('Titre');
+
+    expect(screen.getByRole('checkbox', { name: 'BDE' })).toBeChecked();
+    expect(screen.queryByRole('checkbox', { name: 'Autre asso' })).toBeNull();
+  });
+
+  it('refuses to submit without any organization ticked', async () => {
+    const fetch = stubApi([bde, sport], () => new Response('{}'));
+    renderPage();
+
+    await fillForm('2026-12-01T19:00', '2026-12-01T23:00');
+    await submit();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Choisissez au moins une organisation.',
+    );
+    expect(eventCalls(fetch)).toHaveLength(0);
+  });
+
+  it.each([[[]], [[volunteerOf]]])(
+    'blocks the creation for a user who manages no organization (%j)',
+    async (organizations) => {
+      stubApi(organizations, () => new Response('{}'));
+      renderPage();
+
+      expect(
+        await screen.findByText(/ne gérez aucune organisation/),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('link', { name: 'Gérer mes organisations' }),
+      ).toHaveAttribute('href', '/organizations');
+      expect(screen.queryByLabelText('Titre')).toBeNull();
+    },
+  );
+
   it('refuses an end date before the start without calling the API', async () => {
-    const fetch = vi.fn();
-    vi.stubGlobal('fetch', fetch);
+    const fetch = stubApi([bde], () => new Response('{}'));
     renderPage();
 
     await fillForm('2026-12-01T19:00', '2026-12-01T19:00');
@@ -71,17 +154,16 @@ describe('CreateEventPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'La fin doit être après le début.',
     );
-    expect(fetch).not.toHaveBeenCalled();
+    expect(eventCalls(fetch)).toHaveLength(0);
   });
 
   it('shows the API error', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
+    stubApi(
+      [bde],
+      () =>
         new Response(JSON.stringify({ message: ['capacity must be ...'] }), {
           status: 400,
         }),
-      ),
     );
     renderPage();
 
