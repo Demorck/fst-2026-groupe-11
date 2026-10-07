@@ -101,19 +101,26 @@ Pour modifier le schéma de la base : éditer `backend/prisma/schema.prisma` pui
 |------------------------------------------|-------------|---------------------------------------------------------------|
 | `orga`                                   | Organisateur | Propriétaire de presque tous les événements                    |
 | `orga2`                                  | Organisateur | Atelier code créatif et conférence cybersécurité (propriété)  |
-| `benevole1`, `benevole2`, `benevole3`    | Bénévole    | Créneaux couverts, partiellement couverts ou vides            |
+| `benevole1` à `benevole4`                | Bénévole    | Créneaux couverts, partiellement couverts ou vides ; `benevole4` a quitté le BDE et a une invitation expirée |
 | `participant1` à `participant5`          | Participant | Billets réservés, annulés, validés (check-in) ou non          |
 | `participant6`                           | Participant | Aucun billet : pour essayer la réservation                    |
 
 | Organisation                | Membres et particularités                                                                                   |
 |-----------------------------|-------------------------------------------------------------------------------------------------------------|
-| BDE Nancy (logo vert)       | `orga` gestionnaire ; `benevole1` et `benevole2` bénévoles ; **invitations en attente** : `benevole3` (bénévole) et `orga2` (co-gestionnaire) |
-| Club Sport Université (logo orange) | `orga` gestionnaire ; `benevole2` et `benevole3` bénévoles                                         |
-| Association Numérique (sans logo, initiales) | `orga2` gestionnaire ; `benevole3` a **refusé** une invitation (on peut le réinviter)      |
+| BDE Nancy (logo vert)       | `orga` gestionnaire ; `benevole1` et `benevole2` bénévoles ; **invitations en attente** : `benevole3` (bénévole) et `orga2` (co-gestionnaire) ; `benevole4` **a quitté** (ses heures restent) |
+| Club Sport Université (logo orange) | `orga` gestionnaire ; `benevole2` et `benevole3` bénévoles ; `benevole1` **retiré** ; invitation de `benevole4` **annulée** |
+| Association Numérique (sans logo, initiales) | `orga2` gestionnaire ; `benevole3` a **refusé** une invitation ; celle de `benevole4` a **expiré** (plus de 7 jours) : on peut les réinviter |
 
 Chaque événement est rattaché à au moins une organisation. Le tournoi de futsal en a deux (BDE et Club Sport), les autres une seule : de quoi voir les bulles d'organisations et les badges bénévoles (vert : déjà inscrit sur un créneau, gris : peut bénévoler).
 
 Badges sur la liste des événements, selon le bénévole connecté : `benevole1` est vert sur la soirée de rentrée, le tournoi de futsal et la soirée jeux, gris sur le gala et la conférence IA ; `benevole3` est vert sur le futsal, gris sur le tournoi de l'an dernier et n'a aucun badge sur les événements du BDE tant qu'il n'a pas accepté son invitation. Les autres rôles et les visiteurs n'ont pas de badge.
+
+À essayer avec ces données :
+- **Heures et attestation** : connecté en `orga`, « Mes organisations » puis BDE Nancy : `benevole1` a 4 h, `benevole4` (partie) 4 h, avec une attestation imprimable chacun. Chez Club Sport, `benevole1` (retiré) garde ses 2 h.
+- **Journal** : trois entrées chez Club Sport et BDE (retrait, départ, invitation annulée).
+- **Dashboard** (`orga` puis `orga2`) : la soirée jeux (dans 2 heures) cumule « Peu rempli » et « Créneaux incomplets », la conférence IA (complète) n'a rien à signaler ; `orga2` ne voit que ses événements. Le sélecteur d'organisation restreint le tableau.
+- **Manque de bénévoles** : connecté en bénévole ou organisateur, « Il manque N bénévole(s) » apparaît sur la carte du tournoi de futsal et de la soirée jeux.
+- **Pastille** : `benevole3` et `orga2` voient « Mes organisations » avec un compteur tant que leur invitation du BDE n'est pas traitée.
 
 | Événement                          | Particularité                                                                 |
 |------------------------------------|-------------------------------------------------------------------------------|
