@@ -1,5 +1,15 @@
 import { clearSession, getToken } from '../features/auth/session.ts';
 
+/** Non-2xx API response; `status` lets pages tell a 404 from other failures. */
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
 /**
  * Calls the backend REST API and returns the parsed JSON body.
  * Paths are relative to `/api`, which Vite proxies to the NestJS server in dev.
@@ -25,7 +35,7 @@ export async function apiFetch<T>(
       message?: string | string[];
     } | null;
     const message = [body?.message ?? []].flat().join(', ');
-    throw new Error(message || `API ${res.status} on ${path}`);
+    throw new ApiError(res.status, message || `API ${res.status} on ${path}`);
   }
   return res.json() as Promise<T>;
 }
