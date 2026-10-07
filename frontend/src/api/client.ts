@@ -37,5 +37,7 @@ export async function apiFetch<T>(
     const message = [body?.message ?? []].flat().join(', ');
     throw new ApiError(res.status, message || `API ${res.status} on ${path}`);
   }
+  // 204 has no body (deletions)
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
