@@ -297,4 +297,66 @@ describe('Organizations (e2e)', () => {
       expect(res.body[0].target).toBeNull();
     });
   });
+
+  describe('public page, hours and attestation', () => {
+    it('serves the public page without any token', async () => {
+      prisma.organization.findUnique.mockResolvedValue({
+        id: ORG,
+        name: 'BDE',
+        logoContentType: null,
+        _count: { members: 3 },
+        events: [],
+      });
+
+      const res = await api().get(`/api/organizations/${ORG}/public`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        name: 'BDE',
+        memberCount: 3,
+        upcomingEvents: [],
+      });
+    });
+
+    it('answers 404 on the public page of an unknown organization', async () => {
+      prisma.organization.findUnique.mockResolvedValue(null);
+
+      expect((await api().get(`/api/organizations/${ORG}/public`)).status).toBe(
+        404,
+      );
+    });
+
+    it.each([
+      ['hours', `/api/organizations/${ORG}/hours`],
+      ['attestation', `/api/organizations/${ORG}/members/${USER}/attestation`],
+    ])(
+      'keeps %s private: 401 without token, 403 for a participant',
+      async (_name, path) => {
+        expect((await api().get(path)).status).toBe(401);
+        expect(
+          (
+            await api()
+              .get(path)
+              .set('Authorization', await as(Role.PARTICIPANT))
+          ).status,
+        ).toBe(403);
+      },
+    );
+
+    it('gives a volunteer of the organization their own hours', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValue({
+        status: MembershipStatus.ACCEPTED,
+        role: OrganizationRole.VOLUNTEER,
+      });
+      prisma.organizationMember.findMany.mockResolvedValue([]);
+      prisma.shiftAssignment.findMany = vi.fn().mockResolvedValue([]);
+
+      const res = await api()
+        .get(`/api/organizations/${ORG}/hours`)
+        .set('Authorization', await as(Role.VOLUNTEER));
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    });
+  });
 });

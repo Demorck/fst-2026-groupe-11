@@ -191,6 +191,34 @@ export class OrganizationsController {
     return this.organizations.listAudit(id, user.id);
   }
 
+  @Get(':id/hours')
+  @ApiOkResponse({
+    description:
+      'Heures de bénévolat par membre (un gestionnaire voit tout le monde, un bénévole seulement lui)',
+  })
+  @ApiForbiddenResponse({ description: "Pas membre de l'organisation" })
+  hours(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.organizations.listHours(id, user.id);
+  }
+
+  @Get(':id/members/:userId/attestation')
+  @ApiOkResponse({
+    description: "Détail des créneaux effectués, pour l'attestation",
+  })
+  @ApiForbiddenResponse({
+    description: 'Réservé aux gestionnaires et à l’intéressé',
+  })
+  @ApiNotFoundResponse({
+    description: 'Bénévole inconnu dans cette organisation',
+  })
+  attestation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.organizations.attestation(id, userId, user.id);
+  }
+
   @Put(':id/logo')
   @Roles(Role.ORGANIZER)
   @ApiConsumes('image/png', 'image/jpeg', 'image/webp')
@@ -215,11 +243,20 @@ export class OrganizationsController {
   }
 }
 
-// Public: the logo is an <img src> on the event pages, which do not send the token
+// Public: the logo is an <img src> on the event pages, which do not send the token, and the public page is for everyone
 @ApiTags('organizations')
 @Controller('organizations')
-export class OrganizationLogoController {
+export class PublicOrganizationController {
   constructor(private readonly organizations: OrganizationsService) {}
+
+  @Get(':id/public')
+  @ApiOkResponse({
+    description: 'Page publique : description, membres, événements à venir',
+  })
+  @ApiNotFoundResponse({ description: 'Organisation introuvable' })
+  findPublic(@Param('id', ParseUUIDPipe) id: string) {
+    return this.organizations.findPublic(id);
+  }
 
   @Get(':id/logo')
   @Header('Cache-Control', 'public, max-age=300')

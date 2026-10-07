@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { EventVolunteersController } from './event-volunteers.controller.js';
 import {
-  OrganizationLogoController,
+  PublicOrganizationController,
   OrganizationsController,
 } from './organizations.controller.js';
 import { OrganizationsService } from './organizations.service.js';
@@ -9,7 +9,7 @@ import { OrganizationsService } from './organizations.service.js';
 @Module({
   controllers: [
     OrganizationsController,
-    OrganizationLogoController,
+    PublicOrganizationController,
     EventVolunteersController,
   ],
   providers: [OrganizationsService],

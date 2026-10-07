@@ -10,6 +10,7 @@ import {
   OrganizationAction,
   OrganizationRole,
   Role,
+  TicketStatus,
 } from '@/generated/prisma/enums.js';
 import { PrismaService } from '@/prisma/prisma.service.js';
 import { CreateOrganizationDto } from './dto/create-organization.dto.js';
@@ -25,6 +26,16 @@ const SHOWN_TO_MANAGERS: MembershipStatus[] = [
   MembershipStatus.PENDING,
   MembershipStatus.DECLINED,
 ];
+
+// Members whose past shifts still count for the hours and the attestation, even after they left
+const WITH_HISTORY: MembershipStatus[] = [
+  MembershipStatus.ACCEPTED,
+  MembershipStatus.LEFT,
+  MembershipStatus.REMOVED,
+];
+
+const hoursBetween = (start: Date, end: Date) =>
+  Math.round(((end.getTime() - start.getTime()) / 3_600_000) * 100) / 100;
 
 const isUniqueViolation = (error: unknown) =>
   (error as { code?: string }).code === 'P2002';
@@ -203,6 +214,169 @@ export class OrganizationsService {
       },
       select: { id: true, role: true, status: true },
     });
+  }
+
+  /** Public page of an organization: who they are and what they run next. */
+  async findPublic(id: string) {
+    const found = await this.prisma.organization.findUnique({
+      where: { id },
+      omit: omitLogo,
+      include: {
+        _count: {
+          select: { members: { where: { status: MembershipStatus.ACCEPTED } } },
+        },
+        events: {
+          where: { event: { startsAt: { gte: new Date() } } },
+          orderBy: { event: { startsAt: 'asc' } },
+          take: 20,
+          select: {
+            event: {
+              select: {
+                id: true,
+                title: true,
+                startsAt: true,
+                location: true,
+                category: true,
+                capacity: true,
+                _count: {
+                  select: {
+                    tickets: { where: { status: TicketStatus.RESERVED } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!found) throw new NotFoundException('Organization not found');
+
+    const { _count, events, ...organization } = found;
+    return {
+      ...toPublic(organization),
+      memberCount: _count.members,
+      upcomingEvents: events.map(({ event: { _count: seats, ...event } }) => ({
+        ...event,
+        remainingSeats: event.capacity - seats.tickets,
+      })),
+    };
+  }
+
+  /**
+   * Volunteer hours of the organization: the length of their past shifts on its events. A manager
+   * sees every volunteer, a volunteer only themself. An event run by two organizations counts for both.
+   */
+  async listHours(organizationId: string, userId: string) {
+    const me = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId } },
+    });
+    if (me?.status !== MembershipStatus.ACCEPTED) {
+      throw new ForbiddenException('Not a member of this organization');
+    }
+    const manager = me.role === OrganizationRole.MANAGER;
+
+    const members = await this.prisma.organizationMember.findMany({
+      where: {
+        organizationId,
+        role: OrganizationRole.VOLUNTEER,
+        status: { in: WITH_HISTORY },
+        ...(!manager && { userId }),
+      },
+      include: { user: { select: { id: true, name: true } } },
+      orderBy: { user: { name: 'asc' } },
+    });
+    const assignments = await this.prisma.shiftAssignment.findMany({
+      where: {
+        volunteerId: { in: members.map((member) => member.userId) },
+        shift: {
+          endsAt: { lt: new Date() },
+          event: { organizations: { some: { organizationId } } },
+        },
+      },
+      select: {
+        volunteerId: true,
+        shift: { select: { startsAt: true, endsAt: true } },
+      },
+    });
+
+    return members.map(({ userId: volunteerId, status, user }) => {
+      const done = assignments.filter((a) => a.volunteerId === volunteerId);
+      return {
+        userId: volunteerId,
+        name: user.name,
+        status,
+        shifts: done.length,
+        hours:
+          Math.round(
+            done.reduce(
+              (sum, { shift }) =>
+                sum + hoursBetween(shift.startsAt, shift.endsAt),
+              0,
+            ) * 100,
+          ) / 100,
+      };
+    });
+  }
+
+  /** Detail behind the hours of one volunteer, to print. A manager, or the volunteer themself. */
+  async attestation(
+    organizationId: string,
+    volunteerId: string,
+    requesterId: string,
+  ) {
+    if (requesterId !== volunteerId) {
+      await this.assertManager(organizationId, requesterId);
+    }
+    const member = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId: volunteerId } },
+      include: { user: { select: { id: true, name: true } } },
+    });
+    if (!member || !WITH_HISTORY.includes(member.status)) {
+      throw new NotFoundException('Volunteer not found in this organization');
+    }
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      omit: omitLogo,
+    });
+    if (!organization) throw new NotFoundException('Organization not found');
+
+    const assignments = await this.prisma.shiftAssignment.findMany({
+      where: {
+        volunteerId,
+        shift: {
+          endsAt: { lt: new Date() },
+          event: { organizations: { some: { organizationId } } },
+        },
+      },
+      orderBy: { shift: { startsAt: 'asc' } },
+      select: {
+        shift: {
+          select: {
+            title: true,
+            startsAt: true,
+            endsAt: true,
+            event: { select: { id: true, title: true } },
+          },
+        },
+      },
+    });
+    const shifts = assignments.map(({ shift }) => ({
+      eventId: shift.event.id,
+      eventTitle: shift.event.title,
+      shiftTitle: shift.title,
+      startsAt: shift.startsAt,
+      endsAt: shift.endsAt,
+      hours: hoursBetween(shift.startsAt, shift.endsAt),
+    }));
+    return {
+      organization: toPublic(organization),
+      volunteer: member.user,
+      issuedAt: new Date(),
+      totalHours:
+        Math.round(shifts.reduce((sum, shift) => sum + shift.hours, 0) * 100) /
+        100,
+      shifts,
+    };
   }
 
   async cancelInvitation(

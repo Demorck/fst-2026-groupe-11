@@ -39,7 +39,7 @@ function setup() {
     user: { findUnique: vi.fn() },
     event: { findUnique: vi.fn(), findMany: vi.fn() },
     eventOrganization: { count: vi.fn(), findFirst: vi.fn() },
-    shiftAssignment: { deleteMany: vi.fn() },
+    shiftAssignment: { deleteMany: vi.fn(), findMany: vi.fn() },
     $transaction: vi.fn(),
   };
   // Both forms: a callback receives the same mocks, an array is already a list of calls
@@ -792,6 +792,268 @@ describe('OrganizationsService', () => {
       await expect(
         (await build(prisma)).listAudit('o1', 'vol'),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('public page', () => {
+    it('shows the organization with its upcoming events and their remaining seats', async () => {
+      const prisma = setup();
+      prisma.organization.findUnique.mockResolvedValue({
+        id: 'o1',
+        name: 'BDE',
+        logoContentType: null,
+        _count: { members: 4 },
+        events: [
+          {
+            event: {
+              id: 'e1',
+              title: 'Gala',
+              capacity: 50,
+              _count: { tickets: 12 },
+            },
+          },
+        ],
+      });
+
+      const page = await (await build(prisma)).findPublic('o1');
+
+      expect(page).toEqual({
+        id: 'o1',
+        name: 'BDE',
+        hasLogo: false,
+        memberCount: 4,
+        upcomingEvents: [
+          { id: 'e1', title: 'Gala', capacity: 50, remainingSeats: 38 },
+        ],
+      });
+      const args = prisma.organization.findUnique.mock.calls[0][0];
+      expect(args.omit).toEqual({ logo: true });
+      expect(args.include.events.where.event.startsAt.gte).toBeInstanceOf(Date);
+    });
+
+    it('answers 404 for an unknown organization', async () => {
+      const prisma = setup();
+      prisma.organization.findUnique.mockResolvedValue(null);
+
+      await expect(
+        (await build(prisma)).findPublic('o1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('volunteer hours', () => {
+    const at = (hour: number) =>
+      new Date(Date.UTC(2026, 5, 1) + hour * 3_600_000);
+    const volunteers = [
+      {
+        userId: 'v1',
+        status: MembershipStatus.ACCEPTED,
+        user: { id: 'v1', name: 'Bastien' },
+      },
+      {
+        userId: 'v2',
+        status: MembershipStatus.LEFT,
+        user: { id: 'v2', name: 'Bérénice' },
+      },
+      {
+        userId: 'v3',
+        status: MembershipStatus.ACCEPTED,
+        user: { id: 'v3', name: 'Basile' },
+      },
+    ];
+    const assignments = [
+      { volunteerId: 'v1', shift: { startsAt: at(9), endsAt: at(11) } },
+      { volunteerId: 'v1', shift: { startsAt: at(14), endsAt: at(15.5) } },
+      { volunteerId: 'v2', shift: { startsAt: at(9), endsAt: at(10) } },
+    ];
+
+    const asMember = (
+      prisma: ReturnType<typeof setup>,
+      role: OrganizationRole,
+    ) => {
+      prisma.organizationMember.findUnique.mockResolvedValue({
+        status: MembershipStatus.ACCEPTED,
+        role,
+      });
+      prisma.organizationMember.findMany.mockResolvedValue(volunteers);
+      prisma.shiftAssignment.findMany.mockResolvedValue(assignments);
+    };
+
+    it('gives a manager the hours of every volunteer, former ones included', async () => {
+      const prisma = setup();
+      asMember(prisma, OrganizationRole.MANAGER);
+
+      const rows = await (await build(prisma)).listHours('o1', 'boss');
+
+      expect(rows).toEqual([
+        {
+          userId: 'v1',
+          name: 'Bastien',
+          status: 'ACCEPTED',
+          shifts: 2,
+          hours: 3.5,
+        },
+        { userId: 'v2', name: 'Bérénice', status: 'LEFT', shifts: 1, hours: 1 },
+        {
+          userId: 'v3',
+          name: 'Basile',
+          status: 'ACCEPTED',
+          shifts: 0,
+          hours: 0,
+        },
+      ]);
+      const where = prisma.organizationMember.findMany.mock.calls[0][0].where;
+      expect(where.status).toEqual({
+        in: [
+          MembershipStatus.ACCEPTED,
+          MembershipStatus.LEFT,
+          MembershipStatus.REMOVED,
+        ],
+      });
+      expect(where).not.toHaveProperty('userId');
+    });
+
+    it('counts only shifts already over, on events of the organization', async () => {
+      const prisma = setup();
+      asMember(prisma, OrganizationRole.MANAGER);
+
+      await (await build(prisma)).listHours('o1', 'boss');
+
+      const { shift } = prisma.shiftAssignment.findMany.mock.calls[0][0].where;
+      expect(shift.endsAt.lt).toBeInstanceOf(Date);
+      expect(shift.event).toEqual({
+        organizations: { some: { organizationId: 'o1' } },
+      });
+    });
+
+    it('restricts a volunteer to their own row', async () => {
+      const prisma = setup();
+      asMember(prisma, OrganizationRole.VOLUNTEER);
+
+      await (await build(prisma)).listHours('o1', 'v1');
+
+      expect(
+        prisma.organizationMember.findMany.mock.calls[0][0].where.userId,
+      ).toBe('v1');
+    });
+
+    it('refuses someone who is not an accepted member', async () => {
+      const prisma = setup();
+      prisma.organizationMember.findUnique.mockResolvedValue({
+        status: MembershipStatus.REMOVED,
+        role: OrganizationRole.VOLUNTEER,
+      });
+
+      await expect(
+        (await build(prisma)).listHours('o1', 'v1'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('attestation', () => {
+    const at = (hour: number) =>
+      new Date(Date.UTC(2026, 5, 1) + hour * 3_600_000);
+    const arrange = (
+      prisma: ReturnType<typeof setup>,
+      status: MembershipStatus,
+    ) => {
+      prisma.organizationMember.findUnique.mockResolvedValue({
+        status,
+        user: { id: 'v1', name: 'Bastien' },
+      });
+      prisma.organization.findUnique.mockResolvedValue({
+        id: 'o1',
+        name: 'BDE',
+        logoContentType: null,
+      });
+      prisma.shiftAssignment.findMany.mockResolvedValue([
+        {
+          shift: {
+            title: 'Accueil',
+            startsAt: at(9),
+            endsAt: at(11),
+            event: { id: 'e1', title: 'Gala' },
+          },
+        },
+        {
+          shift: {
+            title: 'Rangement',
+            startsAt: at(22),
+            endsAt: at(23.5),
+            event: { id: 'e1', title: 'Gala' },
+          },
+        },
+      ]);
+    };
+
+    it('lets a volunteer get their own, with the total and each shift', async () => {
+      const prisma = setup();
+      arrange(prisma, MembershipStatus.ACCEPTED);
+
+      const result = await (await build(prisma)).attestation('o1', 'v1', 'v1');
+
+      expect(result.totalHours).toBe(3.5);
+      expect(result.volunteer).toEqual({ id: 'v1', name: 'Bastien' });
+      expect(result.shifts[0]).toMatchObject({
+        eventTitle: 'Gala',
+        shiftTitle: 'Accueil',
+        hours: 2,
+      });
+      expect(result.organization.hasLogo).toBe(false);
+    });
+
+    it('stays available to someone who left', async () => {
+      const prisma = setup();
+      arrange(prisma, MembershipStatus.LEFT);
+
+      await expect(
+        (await build(prisma)).attestation('o1', 'v1', 'v1'),
+      ).resolves.toMatchObject({ totalHours: 3.5 });
+    });
+
+    it('lets a manager get another volunteer’s, and refuses a plain member', async () => {
+      const prisma = setup();
+      arrange(prisma, MembershipStatus.ACCEPTED);
+      prisma.organization.findUnique
+        .mockResolvedValueOnce({ id: 'o1' }) // assertManager
+        .mockResolvedValueOnce({
+          id: 'o1',
+          name: 'BDE',
+          logoContentType: null,
+        });
+      prisma.organizationMember.findUnique
+        .mockResolvedValueOnce({
+          status: MembershipStatus.ACCEPTED,
+          role: OrganizationRole.MANAGER,
+        })
+        .mockResolvedValueOnce({
+          status: MembershipStatus.ACCEPTED,
+          user: { id: 'v1', name: 'Bastien' },
+        });
+      await expect(
+        (await build(prisma)).attestation('o1', 'v1', 'boss'),
+      ).resolves.toMatchObject({ totalHours: 3.5 });
+
+      const other = setup();
+      other.organization.findUnique.mockResolvedValue({ id: 'o1' });
+      other.organizationMember.findUnique.mockResolvedValue({
+        status: MembershipStatus.ACCEPTED,
+        role: OrganizationRole.VOLUNTEER,
+      });
+      await expect(
+        (await build(other)).attestation('o1', 'v1', 'v2'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('answers 404 for someone who never belonged to the organization', async () => {
+      const prisma = setup();
+      prisma.organizationMember.findUnique.mockResolvedValue({
+        status: MembershipStatus.DECLINED,
+      });
+
+      await expect(
+        (await build(prisma)).attestation('o1', 'v1', 'v1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });
