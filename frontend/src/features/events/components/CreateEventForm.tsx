@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { SyntheticEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import TextField from '../../../components/TextField.tsx';
 import { useSubmit } from '../../auth/hooks/useSubmit.ts';
 import { createEvent } from '../api.ts';
@@ -8,7 +8,7 @@ import { CATEGORY_LABELS, EVENT_CATEGORIES } from '../types.ts';
 import type { EventCategory } from '../types.ts';
 
 const fieldClass =
-  'block w-full rounded border border-gray-300 bg-white px-3 py-2 focus-visible:outline-2 focus-visible:outline-indigo-600';
+  'block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 focus-visible:outline-2 focus-visible:outline-indigo-600';
 
 export default function CreateEventForm() {
   const navigate = useNavigate();
@@ -46,7 +46,10 @@ export default function CreateEventForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="max-w-lg space-y-4">
+    <form
+      onSubmit={onSubmit}
+      className="min-w-0 flex-[999_1_520px] space-y-5 rounded-xl border border-gray-200 bg-white p-7"
+    >
       <TextField
         label="Titre"
         required
@@ -122,13 +125,21 @@ export default function CreateEventForm() {
           {error}
         </p>
       )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded bg-indigo-600 px-4 py-2 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60"
-      >
-        {pending ? 'Création...' : "Créer l'événement"}
-      </button>
+      <div className="flex flex-wrap gap-3 pt-1">
+        <button
+          type="submit"
+          disabled={pending}
+          className="min-h-12 rounded-[10px] bg-indigo-600 px-5 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60"
+        >
+          {pending ? 'Création...' : "Créer l'événement"}
+        </button>
+        <Link
+          to="/events"
+          className="inline-flex min-h-12 items-center rounded-[10px] border border-gray-300 px-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        >
+          Annuler
+        </Link>
+      </div>
     </form>
   );
 }
