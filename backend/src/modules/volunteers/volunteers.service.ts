@@ -18,6 +18,32 @@ function assertValidPeriod(startsAt: Date, endsAt: Date) {
 export class VolunteersService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async listShifts(eventId: string, userId: string) {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+    });
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
+    const isOrganizer = event.organizerId === userId;
+    const shifts = await this.prisma.shift.findMany({
+      where: { eventId },
+      orderBy: { startsAt: 'asc' },
+      include: {
+        assignments: {
+          select: { volunteer: { select: { id: true, name: true } } },
+        },
+      },
+    });
+    return shifts.map(({ assignments, ...shift }) => ({
+      ...shift,
+      registered: assignments.length,
+      assigned: assignments.some((a) => a.volunteer.id === userId),
+      // Only the organizer sees who signed up
+      ...(isOrganizer && { volunteers: assignments.map((a) => a.volunteer) }),
+    }));
+  }
+
   async createShift(eventId: string, dto: CreateShiftDto, userId: string) {
     assertValidPeriod(dto.startsAt, dto.endsAt);
     const event = await this.prisma.event.findUnique({

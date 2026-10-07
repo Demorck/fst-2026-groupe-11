@@ -155,3 +155,63 @@ describe('VolunteersService.removeShift', () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
+
+describe('VolunteersService.listShifts', () => {
+  const rows = [
+    {
+      ...dto,
+      id: 's1',
+      assignments: [
+        { volunteer: { id: 'v1', name: 'Alice' } },
+        { volunteer: { id: 'v2', name: 'Bob' } },
+      ],
+    },
+    { ...dto, id: 's2', assignments: [] },
+  ];
+
+  function setupList(event: unknown = { organizerId: 'org-1' }) {
+    const prisma = setup({ event });
+    return Object.assign(prisma, {
+      shift: { ...prisma.shift, findMany: vi.fn().mockResolvedValue(rows) },
+    });
+  }
+
+  it('counts the registered volunteers and flags my own shifts', async () => {
+    const prisma = setupList();
+
+    const result = await (await build(prisma)).listShifts('e1', 'v1');
+
+    expect(result.map((s) => [s.registered, s.assigned])).toEqual([
+      [2, true],
+      [0, false],
+    ]);
+    expect(prisma.shift.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { eventId: 'e1' },
+        orderBy: { startsAt: 'asc' },
+      }),
+    );
+  });
+
+  it('hides the volunteer list from everyone but the organizer', async () => {
+    const result = await (await build(setupList())).listShifts('e1', 'v1');
+
+    expect(result[0]).not.toHaveProperty('volunteers');
+    expect(result[0]).not.toHaveProperty('assignments');
+  });
+
+  it('gives the organizer the volunteer list', async () => {
+    const result = await (await build(setupList())).listShifts('e1', 'org-1');
+
+    expect(result[0].volunteers).toEqual([
+      { id: 'v1', name: 'Alice' },
+      { id: 'v2', name: 'Bob' },
+    ]);
+  });
+
+  it('throws 404 for an unknown event', async () => {
+    await expect(
+      (await build(setupList(null))).listShifts('e1', 'v1'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});

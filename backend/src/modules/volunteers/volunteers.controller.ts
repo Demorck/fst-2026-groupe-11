@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  Get,
   HttpCode,
   Param,
   ParseUUIDPipe,
@@ -30,16 +31,29 @@ import { VolunteersService } from './volunteers.service.js';
 @ApiTags('volunteers')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({ description: 'Non connecté' })
-@ApiForbiddenResponse({
-  description: "Réservé à l'organisateur de l'événement",
-})
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ORGANIZER)
 @Controller()
 export class VolunteersController {
   constructor(private readonly volunteers: VolunteersService) {}
 
+  @Get('events/:eventId/shifts')
+  @Roles(Role.VOLUNTEER, Role.ORGANIZER)
+  @ApiForbiddenResponse({
+    description: 'Réservé aux bénévoles et organisateurs',
+  })
+  @ApiNotFoundResponse({ description: 'Événement introuvable' })
+  list(
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.volunteers.listShifts(eventId, user.id);
+  }
+
   @Post('events/:eventId/shifts')
+  @Roles(Role.ORGANIZER)
+  @ApiForbiddenResponse({
+    description: "Réservé à l'organisateur de l'événement",
+  })
   @ApiCreatedResponse({ description: 'Créneau créé' })
   @ApiBadRequestResponse({ description: 'Données invalides' })
   @ApiNotFoundResponse({ description: 'Événement introuvable' })
@@ -52,6 +66,10 @@ export class VolunteersController {
   }
 
   @Patch('shifts/:id')
+  @Roles(Role.ORGANIZER)
+  @ApiForbiddenResponse({
+    description: "Réservé à l'organisateur de l'événement",
+  })
   @ApiBadRequestResponse({ description: 'Données invalides' })
   @ApiNotFoundResponse({ description: 'Créneau introuvable' })
   update(
@@ -63,6 +81,10 @@ export class VolunteersController {
   }
 
   @Delete('shifts/:id')
+  @Roles(Role.ORGANIZER)
+  @ApiForbiddenResponse({
+    description: "Réservé à l'organisateur de l'événement",
+  })
   @HttpCode(204)
   @ApiNotFoundResponse({ description: 'Créneau introuvable' })
   remove(
