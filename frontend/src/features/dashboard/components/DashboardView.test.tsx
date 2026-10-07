@@ -174,13 +174,11 @@ describe('DashboardView', () => {
   it('shows the API error', async () => {
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify({ message: 'Forbidden' }), {
-            status: 403,
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ message: 'Forbidden' }), {
+          status: 403,
+        }),
+      ),
     );
     renderView();
 
