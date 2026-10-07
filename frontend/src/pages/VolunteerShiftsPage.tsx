@@ -19,6 +19,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   'Already registered': 'Vous êtes déjà inscrit sur ce créneau.',
   'Overlaps another of your shifts':
     'Ce créneau chevauche un autre de vos créneaux.',
+  'Not a volunteer of an organization of this event':
+    "Vous n'êtes bénévole d'aucune organisation de cet événement.",
 };
 
 export default function VolunteerShiftsPage() {

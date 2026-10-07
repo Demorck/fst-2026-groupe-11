@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { OrganizationsService } from '../organizations/organizations.service.js';
 import { VolunteersService } from './volunteers.service.js';
 
 const dto = {
@@ -14,10 +15,20 @@ const dto = {
   endsAt: new Date('2026-12-01T21:00:00Z'),
   requiredVolunteers: 3,
 };
-const stored = { ...dto, id: 's1', event: { organizerId: 'org-1' } };
+const stored = { ...dto, id: 's1', eventId: 'e1' };
+
+// 'org-1' manages the event through one of its organizations; nobody else does
+const organizationsMock = (overrides: Record<string, unknown> = {}) => ({
+  canManageEvent: vi.fn((userId: string) =>
+    Promise.resolve(userId === 'org-1'),
+  ),
+  isVolunteerOfEvent: vi.fn().mockResolvedValue(true),
+  ...overrides,
+});
 
 function setup({
-  event = { organizerId: 'org-1' } as unknown,
+  // the author is not who decides: rights come from the organizations of the event
+  event = { id: 'e1', organizerId: 'author' } as unknown,
   shift = stored as unknown,
 } = {}) {
   return {
@@ -35,18 +46,22 @@ function setup({
   };
 }
 
-async function build(prisma: ReturnType<typeof setup>) {
+async function build(
+  prisma: ReturnType<typeof setup>,
+  organizations = organizationsMock(),
+) {
   const module = await Test.createTestingModule({
     providers: [
       VolunteersService,
       { provide: PrismaService, useValue: prisma },
+      { provide: OrganizationsService, useValue: organizations },
     ],
   }).compile();
   return module.get(VolunteersService);
 }
 
 describe('VolunteersService.createShift', () => {
-  it('creates the shift on the organizer own event', async () => {
+  it('creates the shift for a manager of an organization of the event', async () => {
     const prisma = setup();
 
     await (await build(prisma)).createShift('e1', dto, 'org-1');
@@ -54,6 +69,19 @@ describe('VolunteersService.createShift', () => {
     expect(prisma.shift.create).toHaveBeenCalledWith({
       data: { ...dto, eventId: 'e1' },
     });
+  });
+
+  it('refuses the author of the event when no organization of it is theirs', async () => {
+    const prisma = setup();
+    const organizations = organizationsMock({
+      canManageEvent: vi.fn().mockResolvedValue(false),
+    });
+
+    await expect(
+      (await build(prisma, organizations)).createShift('e1', dto, 'author'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(organizations.canManageEvent).toHaveBeenCalledWith('author', 'e1');
+    expect(prisma.shift.create).not.toHaveBeenCalled();
   });
 
   it('refuses another organizer', async () => {
@@ -170,7 +198,7 @@ describe('VolunteersService.listShifts', () => {
     { ...dto, id: 's2', assignments: [] },
   ];
 
-  function setupList(event: unknown = { organizerId: 'org-1' }) {
+  function setupList(event: unknown = { id: 'e1' }) {
     const prisma = setup({ event });
     return Object.assign(prisma, {
       shift: { ...prisma.shift, findMany: vi.fn().mockResolvedValue(rows) },
@@ -194,14 +222,14 @@ describe('VolunteersService.listShifts', () => {
     );
   });
 
-  it('hides the volunteer list from everyone but the organizer', async () => {
+  it('hides the volunteer list from everyone but the managers', async () => {
     const result = await (await build(setupList())).listShifts('e1', 'v1');
 
     expect(result[0]).not.toHaveProperty('volunteers');
     expect(result[0]).not.toHaveProperty('assignments');
   });
 
-  it('gives the organizer the volunteer list', async () => {
+  it('gives a manager of the event the volunteer list', async () => {
     const result = await (await build(setupList())).listShifts('e1', 'org-1');
 
     expect(result[0].volunteers).toEqual([
@@ -219,6 +247,7 @@ describe('VolunteersService.listShifts', () => {
 
 describe('VolunteersService.assign', () => {
   const shiftRow = {
+    eventId: 'e1',
     requiredVolunteers: 2,
     startsAt: dto.startsAt,
     endsAt: dto.endsAt,
@@ -245,11 +274,15 @@ describe('VolunteersService.assign', () => {
     return { tx, prisma };
   }
 
-  const run = async (setupResult: ReturnType<typeof setupAssign>) => {
+  const run = async (
+    setupResult: ReturnType<typeof setupAssign>,
+    organizations = organizationsMock(),
+  ) => {
     const module = await Test.createTestingModule({
       providers: [
         VolunteersService,
         { provide: PrismaService, useValue: setupResult.prisma },
+        { provide: OrganizationsService, useValue: organizations },
       ],
     }).compile();
     return module.get(VolunteersService).assign('s1', 'v1');
@@ -263,6 +296,20 @@ describe('VolunteersService.assign', () => {
     expect(s.tx.shiftAssignment.create).toHaveBeenCalledWith({
       data: { shiftId: 's1', volunteerId: 'v1' },
     });
+  });
+
+  it('refuses a volunteer who belongs to no organization of the event, before anything else', async () => {
+    const s = setupAssign();
+    const organizations = organizationsMock({
+      isVolunteerOfEvent: vi.fn().mockResolvedValue(false),
+    });
+
+    await expect(run(s, organizations)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(organizations.isVolunteerOfEvent).toHaveBeenCalledWith('v1', 'e1');
+    expect(s.tx.shiftAssignment.count).not.toHaveBeenCalled();
+    expect(s.tx.shiftAssignment.create).not.toHaveBeenCalled();
   });
 
   it('throws 404 for an unknown shift', async () => {
@@ -312,6 +359,7 @@ describe('VolunteersService.unassign', () => {
           provide: PrismaService,
           useValue: { shiftAssignment: { deleteMany } },
         },
+        { provide: OrganizationsService, useValue: organizationsMock() },
       ],
     }).compile();
     await module.get(VolunteersService).unassign('s1', 'v1');
