@@ -50,6 +50,7 @@ Les deux projets sont découpés par domaine métier, avec les mêmes noms des d
 | Événements                     | `events/`                | `events/`                  |
 | Billets et check-in            | `tickets/`               | `tickets/`                 |
 | Créneaux bénévoles             | `volunteers/`            | `volunteers/`              |
+| Organisations, invitations     | `organizations/`         | `organizations/`           |
 | Dashboard de suivi             | `dashboard/`             | `dashboard/`               |
 | IA (prédiction, communication) | `ai/`                    | `ai/`                      |
 
@@ -103,6 +104,14 @@ Pour modifier le schéma de la base : éditer `backend/prisma/schema.prisma` pui
 | `benevole1`, `benevole2`, `benevole3`    | Bénévole    | Créneaux couverts, partiellement couverts ou vides            |
 | `participant1` à `participant5`          | Participant | Billets réservés, annulés, validés (check-in) ou non          |
 | `participant6`                           | Participant | Aucun billet : pour essayer la réservation                    |
+
+| Organisation                | Membres et particularités                                                                                   |
+|-----------------------------|-------------------------------------------------------------------------------------------------------------|
+| BDE Nancy (logo vert)       | `orga` gestionnaire ; `benevole1` et `benevole2` bénévoles ; **invitations en attente** : `benevole3` (bénévole) et `orga2` (co-gestionnaire) |
+| Club Sport Université (logo orange) | `orga` gestionnaire ; `benevole2` et `benevole3` bénévoles                                         |
+| Association Numérique (sans logo, initiales) | `orga2` gestionnaire ; `benevole3` a **refusé** une invitation (on peut le réinviter)      |
+
+Chaque événement est rattaché à au moins une organisation. Le tournoi de futsal en a deux (BDE et Club Sport), les autres une seule : de quoi voir les bulles d'organisations et les badges bénévoles (vert : déjà inscrit sur un créneau, gris : peut bénévoler).
 
 | Événement                          | Particularité                                                                 |
 |------------------------------------|-------------------------------------------------------------------------------|
