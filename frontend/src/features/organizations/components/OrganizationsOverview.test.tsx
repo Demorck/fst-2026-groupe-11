@@ -59,7 +59,7 @@ describe('OrganizationsOverview', () => {
 
     expect(
       await screen.findByRole('link', { name: 'BDE Nancy' }),
-    ).toHaveAttribute('href', '/organizations/o1');
+    ).toHaveAttribute('href', '/organizations/o1/manage');
     expect(screen.getByText('Bénévole')).toBeInTheDocument();
   });
 

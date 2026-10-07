@@ -1,9 +1,13 @@
 import { apiFetch } from '../../api/client.ts';
 import type {
+  Attestation,
+  AuditEntry,
+  HoursRow,
   Invitation,
   MyOrganization,
   OrganizationDetail,
   OrganizationSummary,
+  PublicOrganization,
 } from './types.ts';
 
 const json = (method: string, body: unknown): RequestInit => ({
@@ -42,4 +46,32 @@ export const uploadLogo = (id: string, file: File) =>
     method: 'PUT',
     body: file,
     headers: { 'Content-Type': file.type },
+  });
+
+export const getPublicOrganization = (id: string) =>
+  apiFetch<PublicOrganization>(`/organizations/${id}/public`);
+
+export const getHours = (id: string) =>
+  apiFetch<HoursRow[]>(`/organizations/${id}/hours`);
+
+export const getAudit = (id: string) =>
+  apiFetch<AuditEntry[]>(`/organizations/${id}/audit`);
+
+export const getAttestation = (id: string, userId: string) =>
+  apiFetch<Attestation>(`/organizations/${id}/members/${userId}/attestation`);
+
+export const cancelInvitation = (id: string, memberId: string) =>
+  apiFetch<unknown>(`/organizations/${id}/invitations/${memberId}`, {
+    method: 'DELETE',
+  });
+
+export const removeMember = (id: string, memberId: string) =>
+  apiFetch<{ removedShifts: number }>(
+    `/organizations/${id}/members/${memberId}`,
+    { method: 'DELETE' },
+  );
+
+export const leaveOrganization = (id: string) =>
+  apiFetch<{ removedShifts: number }>(`/organizations/${id}/leave`, {
+    method: 'POST',
   });

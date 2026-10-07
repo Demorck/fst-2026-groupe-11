@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import type { OrganizationSummary } from '../types.ts';
 import OrganizationLogo from './OrganizationLogo.tsx';
 
@@ -12,8 +13,13 @@ export default function OrganizationBubbles({
     <ul aria-label="Organisations" className="flex -space-x-2">
       {organizations.map((organization) => (
         <li key={organization.id} title={organization.name}>
-          <OrganizationLogo organization={organization} />
-          <span className="sr-only">{organization.name}</span>
+          <Link
+            to={`/organizations/${organization.id}`}
+            className="inline-block rounded-full focus-visible:outline-2 focus-visible:outline-indigo-600"
+          >
+            <OrganizationLogo organization={organization} />
+            <span className="sr-only">{organization.name}</span>
+          </Link>
         </li>
       ))}
     </ul>

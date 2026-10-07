@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import RootLayout from './RootLayout.tsx';
 
 const logIn = (role: string) =>
@@ -19,6 +19,24 @@ const renderLayout = () =>
       <RootLayout />
     </MemoryRouter>,
   );
+
+const stubInvitations = (count: number) => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValue(
+      new Response(
+        JSON.stringify(
+          Array.from({ length: count }, (_, i) => ({ id: `i${i}` })),
+        ),
+      ),
+    );
+  vi.stubGlobal('fetch', fetch);
+  return fetch;
+};
+
+beforeEach(() => {
+  stubInvitations(0);
+});
 
 describe('RootLayout header', () => {
   it('shows the login link when logged out', () => {
@@ -117,5 +135,49 @@ describe('RootLayout header', () => {
     expect(screen.getByRole('link', { name: 'Connexion' })).toBeInTheDocument();
     expect(localStorage.getItem('session')).toBeNull();
     expect(screen.queryByRole('link', { name: 'Dashboard' })).toBeNull();
+  });
+
+  describe('pending invitations badge', () => {
+    it('shows how many invitations wait for an answer', async () => {
+      stubInvitations(2);
+      logIn('VOLUNTEER');
+      renderLayout();
+
+      expect(
+        await screen.findByLabelText('2 invitation(s) en attente'),
+      ).toHaveTextContent('2');
+    });
+
+    it('shows nothing when there is none', async () => {
+      stubInvitations(0);
+      logIn('VOLUNTEER');
+      renderLayout();
+
+      await screen.findByRole('link', { name: 'Mes organisations' });
+
+      expect(screen.queryByLabelText(/invitation\(s\) en attente/)).toBeNull();
+    });
+
+    it('does not even ask the API for a participant', () => {
+      const fetch = stubInvitations(3);
+      logIn('PARTICIPANT');
+      renderLayout();
+
+      expect(fetch).not.toHaveBeenCalledWith(
+        '/api/organizations/invitations',
+        expect.anything(),
+      );
+      expect(screen.queryByLabelText(/invitation\(s\) en attente/)).toBeNull();
+    });
+
+    it('shows nothing when the API fails', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+      logIn('ORGANIZER');
+      renderLayout();
+
+      await screen.findByRole('link', { name: 'Mes organisations' });
+
+      expect(screen.queryByLabelText(/invitation\(s\) en attente/)).toBeNull();
+    });
   });
 });

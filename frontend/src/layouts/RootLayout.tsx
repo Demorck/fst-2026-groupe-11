@@ -1,9 +1,13 @@
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { clearSession, useSession } from '../features/auth/session.ts';
+import { usePendingInvitations } from '../features/organizations/pendingInvitations.ts';
 
 export default function RootLayout() {
   const session = useSession();
   const navigate = useNavigate();
+  const inOrganizations =
+    session?.user.role === 'ORGANIZER' || session?.user.role === 'VOLUNTEER';
+  const pendingInvitations = usePendingInvitations(inOrganizations);
 
   async function logout() {
     clearSession();
@@ -27,9 +31,18 @@ export default function RootLayout() {
             </>
           )}
           {session && <NavLink to="/me/tickets">Mes billets</NavLink>}
-          {(session?.user.role === 'ORGANIZER' ||
-            session?.user.role === 'VOLUNTEER') && (
-            <NavLink to="/organizations">Mes organisations</NavLink>
+          {inOrganizations && (
+            <NavLink to="/organizations">
+              Mes organisations
+              {pendingInvitations > 0 && (
+                <span
+                  aria-label={`${pendingInvitations} invitation(s) en attente`}
+                  className="ml-1.5 rounded-full bg-indigo-600 px-1.5 py-0.5 text-xs font-semibold text-white"
+                >
+                  {pendingInvitations}
+                </span>
+              )}
+            </NavLink>
           )}
           {session ? (
             <>

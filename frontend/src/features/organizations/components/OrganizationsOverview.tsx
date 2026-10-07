@@ -11,6 +11,7 @@ import {
   getMyOrganizations,
 } from '../api.ts';
 import { translate } from '../messages.ts';
+import { refreshPendingInvitations } from '../pendingInvitations.ts';
 import { ROLE_LABELS } from '../types.ts';
 import type { Invitation, MyOrganization } from '../types.ts';
 import OrganizationLogo from './OrganizationLogo.tsx';
@@ -27,7 +28,7 @@ function CreateOrganizationForm() {
       name: name.trim(),
       description: description.trim() || undefined,
     });
-    await navigate(`/organizations/${organization.id}`);
+    await navigate(`/organizations/${organization.id}/manage`);
   });
 
   function onSubmit(event: SyntheticEvent) {
@@ -98,7 +99,7 @@ export default function OrganizationsOverview() {
     setError(null);
     try {
       await answerInvitation(id, choice);
-      await load();
+      await Promise.all([load(), refreshPendingInvitations()]);
     } catch (err) {
       setError(translate((err as Error).message));
     }
@@ -169,7 +170,7 @@ export default function OrganizationsOverview() {
                 className="size-10 text-sm"
               />
               <Link
-                to={`/organizations/${organization.id}`}
+                to={`/organizations/${organization.id}/manage`}
                 className="flex-1 font-semibold text-indigo-700 hover:underline"
               >
                 {organization.name}
