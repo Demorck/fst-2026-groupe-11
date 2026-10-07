@@ -32,6 +32,7 @@ describe('Organizations (e2e)', () => {
     eventOrganization: { count: vi.fn(), findFirst: vi.fn() },
     organizationAuditLog: { create: vi.fn(), findMany: vi.fn() },
     shiftAssignment: { deleteMany: vi.fn(), findMany: vi.fn() },
+    $queryRaw: vi.fn(),
     $transaction: vi.fn(),
   };
 
