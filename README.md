@@ -90,3 +90,6 @@ Plus de détails dans [backend/README.md](backend/README.md) et [frontend/README
 
 Pour modifier le schéma de la base : éditer `backend/prisma/schema.prisma` puis lancer
 `npm run prisma:migrate --prefix backend` (crée une nouvelle migration et régénère le client).
+
+# Maquette
+https://claude.ai/artifact/HZNcp6ANdFbVzhMhKKMDzR#page-dcb81aee8d83
