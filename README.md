@@ -113,6 +113,8 @@ Pour modifier le schéma de la base : éditer `backend/prisma/schema.prisma` pui
 
 Chaque événement est rattaché à au moins une organisation. Le tournoi de futsal en a deux (BDE et Club Sport), les autres une seule : de quoi voir les bulles d'organisations et les badges bénévoles (vert : déjà inscrit sur un créneau, gris : peut bénévoler).
 
+Badges sur la liste des événements, selon le bénévole connecté : `benevole1` est vert sur la soirée de rentrée, le tournoi de futsal et la soirée jeux, gris sur le gala et la conférence IA ; `benevole3` est vert sur le futsal, gris sur le tournoi de l'an dernier et n'a aucun badge sur les événements du BDE tant qu'il n'a pas accepté son invitation. Les autres rôles et les visiteurs n'ont pas de badge.
+
 | Événement                          | Particularité                                                                 |
 |------------------------------------|-------------------------------------------------------------------------------|
 | Soirée de rentrée (dans 7 jours)   | Capacité 100, un créneau d'accueil couvert                                    |

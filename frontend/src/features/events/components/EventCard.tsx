@@ -1,4 +1,6 @@
 import { Link } from 'react-router';
+import OrganizationBubbles from '../../organizations/components/OrganizationBubbles.tsx';
+import VolunteerBadge from '../../organizations/components/VolunteerBadge.tsx';
 import { CATEGORY_LABELS, formatEventDate } from '../types.ts';
 import type { EventWithSeats } from '../types.ts';
 
@@ -24,6 +26,10 @@ export default function EventCard({ event }: { event: EventWithSeats }) {
             : 'Complet'}
         </span>
       </p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <OrganizationBubbles organizations={event.organizations} />
+        <VolunteerBadge status={event.volunteerStatus} />
+      </div>
     </li>
   );
 }

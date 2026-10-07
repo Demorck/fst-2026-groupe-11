@@ -1,3 +1,8 @@
+import type {
+  OrganizationSummary,
+  VolunteerStatus,
+} from '../organizations/types.ts';
+
 export const EVENT_CATEGORIES = [
   'CONFERENCE',
   'PARTY',
@@ -46,6 +51,9 @@ export interface EventDetail extends Omit<
 export interface EventWithSeats extends EventDetail {
   organizer: { id: string; name: string };
   remainingSeats: number;
+  organizations: OrganizationSummary[];
+  /** Only for a logged in volunteer of one of the organizations, or already on a shift. */
+  volunteerStatus: VolunteerStatus | null;
 }
 
 export const formatEventDate = (iso: string) =>
