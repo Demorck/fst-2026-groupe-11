@@ -16,12 +16,20 @@ interface ShiftListProps {
   /** Organizer actions, hidden when missing */
   onEdit?: (shift: Shift) => void;
   onDelete?: (shift: Shift) => void;
+  /** Volunteer sign-up actions, hidden when missing */
+  onJoin?: (shift: Shift) => void;
+  onLeave?: (shift: Shift) => void;
+  /** Locks the sign-up buttons while a request runs */
+  busy?: boolean;
 }
 
 export default function ShiftList({
   shifts,
   onEdit,
   onDelete,
+  onJoin,
+  onLeave,
+  busy,
 }: ShiftListProps) {
   if (shifts.length === 0) {
     return <p>Aucun créneau pour cet événement.</p>;
@@ -72,6 +80,37 @@ export default function ShiftList({
                 </p>
               )}
             </div>
+            {onJoin && onLeave && (
+              <div className="flex w-45 justify-end">
+                {shift.assigned ? (
+                  <button
+                    type="button"
+                    onClick={() => onLeave(shift)}
+                    disabled={busy}
+                    className={`${actionClass} disabled:opacity-60`}
+                  >
+                    Se désinscrire
+                  </button>
+                ) : full ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="min-h-11 rounded-lg bg-gray-200 px-4 font-semibold text-gray-600"
+                  >
+                    Complet
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onJoin(shift)}
+                    disabled={busy}
+                    className="min-h-11 rounded-lg bg-indigo-600 px-4 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60"
+                  >
+                    S'inscrire
+                  </button>
+                )}
+              </div>
+            )}
             {(onEdit || onDelete) && (
               <div className="flex gap-2">
                 {onEdit && (

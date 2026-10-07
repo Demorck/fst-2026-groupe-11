@@ -91,6 +91,106 @@ describe('VolunteerShiftsPage', () => {
   });
 });
 
+describe('VolunteerShiftsPage sign-up', () => {
+  const join = () => screen.findByRole('button', { name: "S'inscrire" });
+  const leave = () => screen.findByRole('button', { name: 'Se désinscrire' });
+
+  it('shows the right button on each shift', async () => {
+    logInAs('VOLUNTEER');
+    const open = {
+      ...shifts[0],
+      id: 's3',
+      title: 'Vestiaire',
+      assigned: false,
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json([...shifts, open])));
+
+    renderPage();
+
+    // s1 is mine, s2 is full, s3 is open
+    expect(await leave()).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Complet' })).toBeDisabled();
+    expect(await join()).toBeVisible();
+  });
+
+  it('signs up and reloads the list', async () => {
+    logInAs('VOLUNTEER');
+    const open = { ...shifts[0], assigned: false, registered: 1 };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json([open]))
+      .mockResolvedValueOnce(json({ id: 'a1' }, 201))
+      .mockResolvedValueOnce(
+        json([{ ...open, assigned: true, registered: 2 }]),
+      );
+    vi.stubGlobal('fetch', fetch);
+    renderPage();
+
+    await userEvent.click(await join());
+
+    expect(await screen.findByText('2 / 3 bénévoles')).toBeInTheDocument();
+    expect(await leave()).toBeVisible();
+    const [url, init] = fetch.mock.calls[1] as [string, RequestInit];
+    expect(url).toBe('/api/shifts/s1/assignments');
+    expect(init.method).toBe('POST');
+  });
+
+  it('signs out of my shift', async () => {
+    logInAs('VOLUNTEER');
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json([shifts[0]]))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(
+        json([{ ...shifts[0], assigned: false, registered: 1 }]),
+      );
+    vi.stubGlobal('fetch', fetch);
+    renderPage();
+
+    await userEvent.click(await leave());
+
+    expect(await join()).toBeVisible();
+    const [url, init] = fetch.mock.calls[1] as [string, RequestInit];
+    expect(url).toBe('/api/shifts/s1/assignments');
+    expect(init.method).toBe('DELETE');
+  });
+
+  it.each([
+    ['Shift is full', 'Ce créneau est complet.'],
+    [
+      'Overlaps another of your shifts',
+      'Ce créneau chevauche un autre de vos créneaux.',
+    ],
+  ])('translates the "%s" refusal', async (message, text) => {
+    logInAs('VOLUNTEER');
+    const open = { ...shifts[0], assigned: false };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(json([open]))
+        .mockResolvedValueOnce(json({ message }, 409))
+        .mockResolvedValueOnce(json([open])),
+    );
+    renderPage();
+
+    await userEvent.click(await join());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(text);
+  });
+
+  it('offers no sign-up to an organizer', async () => {
+    logInAs('ORGANIZER');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(shifts)));
+
+    renderPage();
+
+    await screen.findByText('Bar');
+    expect(screen.queryByRole('button', { name: "S'inscrire" })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Se désinscrire' })).toBeNull();
+  });
+});
+
 describe('VolunteerShiftsPage as organizer', () => {
   it('creates a shift and reloads the list', async () => {
     logInAs('ORGANIZER');

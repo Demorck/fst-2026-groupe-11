@@ -4,6 +4,8 @@ import { useAuth } from '../features/auth/useAuth.ts';
 import {
   createShift,
   deleteShift,
+  joinShift,
+  leaveShift,
   listShifts,
   updateShift,
 } from '../features/volunteers/api.ts';
@@ -11,10 +13,20 @@ import ShiftForm from '../features/volunteers/components/ShiftForm.tsx';
 import ShiftList from '../features/volunteers/components/ShiftList.tsx';
 import type { Shift, ShiftInput } from '../features/volunteers/types.ts';
 
+// The API answers in English, the interface speaks French
+const ERROR_MESSAGES: Record<string, string> = {
+  'Shift is full': 'Ce créneau est complet.',
+  'Already registered': 'Vous êtes déjà inscrit sur ce créneau.',
+  'Overlaps another of your shifts':
+    'Ce créneau chevauche un autre de vos créneaux.',
+};
+
 export default function VolunteerShiftsPage() {
   const { eventId = '' } = useParams();
   const { user } = useAuth();
   const isOrganizer = user?.role === 'ORGANIZER';
+  const isVolunteer = user?.role === 'VOLUNTEER';
+  const [busy, setBusy] = useState(false);
   const [shifts, setShifts] = useState<Shift[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // the shift being edited, 'new' for the creation form, none when closed
@@ -51,6 +63,20 @@ export default function VolunteerShiftsPage() {
     } catch (err) {
       setError((err as Error).message);
     }
+  }
+
+  async function toggle(shift: Shift) {
+    setBusy(true);
+    setError(null);
+    try {
+      await (shift.assigned ? leaveShift(shift.id) : joinShift(shift.id));
+    } catch (err) {
+      const message = (err as Error).message;
+      setError(ERROR_MESSAGES[message] ?? message);
+    }
+    // reload even after a refusal: the shift may have filled up meanwhile
+    await load();
+    setBusy(false);
   }
 
   const mine = shifts?.filter((s) => s.assigned).length ?? 0;
@@ -101,6 +127,9 @@ export default function VolunteerShiftsPage() {
           shifts={shifts}
           onEdit={isOrganizer ? setEditing : undefined}
           onDelete={isOrganizer ? (s) => void remove(s) : undefined}
+          onJoin={isVolunteer ? (s) => void toggle(s) : undefined}
+          onLeave={isVolunteer ? (s) => void toggle(s) : undefined}
+          busy={busy}
         />
       )}
     </div>

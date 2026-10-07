@@ -18,3 +18,9 @@ export const updateShift = (id: string, input: ShiftInput) =>
 
 export const deleteShift = (id: string) =>
   apiFetch<void>(`/shifts/${id}`, { method: 'DELETE' });
+
+export const joinShift = (id: string) =>
+  apiFetch<void>(`/shifts/${id}/assignments`, { method: 'POST' });
+
+export const leaveShift = (id: string) =>
+  apiFetch<void>(`/shifts/${id}/assignments`, { method: 'DELETE' });
