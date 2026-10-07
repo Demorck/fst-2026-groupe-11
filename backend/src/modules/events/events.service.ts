@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { TicketStatus } from '@/generated/prisma/enums.js';
+import { OrganizationsService } from '../organizations/organizations.service.js';
 import { PrismaService } from '@/prisma/prisma.service.js';
 import { CreateEventDto } from './dto/create-event.dto.js';
 import { ListEventsQueryDto } from './dto/list-events-query.dto.js';
@@ -24,13 +25,39 @@ function withRemainingSeats<
 
 @Injectable()
 export class EventsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly organizations: OrganizationsService,
+  ) {}
 
-  create(dto: CreateEventDto, organizerId: string) {
-    if (dto.endsAt <= dto.startsAt) {
+  async create(
+    { organizationIds, ...data }: CreateEventDto,
+    organizerId: string,
+  ) {
+    if (data.endsAt <= data.startsAt) {
       throw new BadRequestException('endsAt must be after startsAt');
     }
-    return this.prisma.event.create({ data: { ...dto, organizerId } });
+    // An event always belongs to at least one organization the author manages
+    await this.organizations.assertManagesAll(organizerId, organizationIds);
+    const event = await this.prisma.event.create({
+      data: {
+        ...data,
+        organizerId,
+        organizations: {
+          create: organizationIds.map((organizationId) => ({ organizationId })),
+        },
+      },
+      include: {
+        organizations: {
+          select: { organization: { select: { id: true, name: true } } },
+        },
+      },
+    });
+    const { organizations, ...rest } = event;
+    return {
+      ...rest,
+      organizations: organizations.map(({ organization }) => organization),
+    };
   }
 
   async findAll({ from, to, category }: ListEventsQueryDto) {

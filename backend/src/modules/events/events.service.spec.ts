@@ -1,7 +1,12 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { EventCategory } from '../../generated/prisma/enums.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { OrganizationsService } from '../organizations/organizations.service.js';
 import { EventsService } from './events.service.js';
 
 const dto = {
@@ -12,32 +17,69 @@ const dto = {
   location: 'Nancy',
   capacity: 50,
   category: EventCategory.PARTY,
+  organizationIds: ['o1', 'o2'],
 };
 
-async function build(event: Record<string, ReturnType<typeof vi.fn>>) {
+async function build(
+  event: Record<string, ReturnType<typeof vi.fn>>,
+  assertManagesAll = vi.fn().mockResolvedValue(undefined),
+) {
   const module = await Test.createTestingModule({
-    providers: [EventsService, { provide: PrismaService, useValue: { event } }],
+    providers: [
+      EventsService,
+      { provide: PrismaService, useValue: { event } },
+      { provide: OrganizationsService, useValue: { assertManagesAll } },
+    ],
   }).compile();
   return module.get(EventsService);
 }
 
 describe('EventsService', () => {
-  it('stores the logged in organizer as owner', async () => {
-    const create = vi.fn().mockResolvedValue({ id: 'e1' });
-    await (await build({ create })).create(dto, 'org-1');
+  it('stores the logged in organizer as author and links every organization', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'e1', organizations: [] });
+    await (await build({ create })).create(dto, 'user-1');
 
-    expect(create).toHaveBeenCalledWith({
-      data: { ...dto, organizerId: 'org-1' },
+    const { organizationIds: _ids, ...fields } = dto;
+    expect(create.mock.calls[0][0].data).toEqual({
+      ...fields,
+      organizerId: 'user-1',
+      organizations: {
+        create: [{ organizationId: 'o1' }, { organizationId: 'o2' }],
+      },
     });
+  });
+
+  it('returns the organizations as a flat list of id and name', async () => {
+    const create = vi.fn().mockResolvedValue({
+      id: 'e1',
+      organizations: [{ organization: { id: 'o1', name: 'BDE' } }],
+    });
+
+    const event = await (await build({ create })).create(dto, 'user-1');
+
+    expect(event.organizations).toEqual([{ id: 'o1', name: 'BDE' }]);
+  });
+
+  it('refuses organizations the author does not manage', async () => {
+    const create = vi.fn();
+    const assertManagesAll = vi
+      .fn()
+      .mockRejectedValue(new ForbiddenException());
+
+    await expect(
+      (await build({ create }, assertManagesAll)).create(dto, 'user-1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(assertManagesAll).toHaveBeenCalledWith('user-1', ['o1', 'o2']);
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('rejects an event that ends before it starts', async () => {
     const create = vi.fn();
     const service = await build({ create });
 
-    expect(() =>
-      service.create({ ...dto, endsAt: dto.startsAt }, 'org-1'),
-    ).toThrow(BadRequestException);
+    await expect(
+      service.create({ ...dto, endsAt: dto.startsAt }, 'user-1'),
+    ).rejects.toBeInstanceOf(BadRequestException);
     expect(create).not.toHaveBeenCalled();
   });
 
