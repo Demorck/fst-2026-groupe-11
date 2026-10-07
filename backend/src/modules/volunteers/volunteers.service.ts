@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -56,6 +57,43 @@ export class VolunteersService {
       throw new ForbiddenException('Not the organizer of this event');
     }
     return this.prisma.shift.create({ data: { ...dto, eventId } });
+  }
+
+  assign(shiftId: string, volunteerId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      // Lock the shift row: concurrent sign-ups run one at a time, so the full check cannot be overtaken
+      const [shift] = await tx.$queryRaw<
+        { requiredVolunteers: number; startsAt: Date; endsAt: Date }[]
+      >`SELECT "requiredVolunteers", "startsAt", "endsAt" FROM "Shift" WHERE id = ${shiftId} FOR UPDATE`;
+      if (!shift) {
+        throw new NotFoundException('Shift not found');
+      }
+
+      const existing = await tx.shiftAssignment.findUnique({
+        where: { shiftId_volunteerId: { shiftId, volunteerId } },
+      });
+      if (existing) {
+        throw new ConflictException('Already registered');
+      }
+      const taken = await tx.shiftAssignment.count({ where: { shiftId } });
+      if (taken >= shift.requiredVolunteers) {
+        throw new ConflictException('Shift is full');
+      }
+      // Any event: a volunteer cannot be in two places at once
+      const overlapping = await tx.shiftAssignment.findFirst({
+        where: {
+          volunteerId,
+          shift: {
+            startsAt: { lt: shift.endsAt },
+            endsAt: { gt: shift.startsAt },
+          },
+        },
+      });
+      if (overlapping) {
+        throw new ConflictException('Overlaps another of your shifts');
+      }
+      return tx.shiftAssignment.create({ data: { shiftId, volunteerId } });
+    });
   }
 
   async updateShift(id: string, dto: UpdateShiftDto, userId: string) {

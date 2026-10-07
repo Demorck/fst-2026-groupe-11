@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -213,5 +214,90 @@ describe('VolunteersService.listShifts', () => {
     await expect(
       (await build(setupList(null))).listShifts('e1', 'v1'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('VolunteersService.assign', () => {
+  const shiftRow = {
+    requiredVolunteers: 2,
+    startsAt: dto.startsAt,
+    endsAt: dto.endsAt,
+  };
+
+  function setupAssign({
+    shift = shiftRow as unknown,
+    existing = null as unknown,
+    taken = 0,
+    overlapping = null as unknown,
+  } = {}) {
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue(shift ? [shift] : []),
+      shiftAssignment: {
+        findUnique: vi.fn().mockResolvedValue(existing),
+        count: vi.fn().mockResolvedValue(taken),
+        findFirst: vi.fn().mockResolvedValue(overlapping),
+        create: vi.fn().mockResolvedValue({ id: 'a1' }),
+      },
+    };
+    const prisma = {
+      $transaction: vi.fn((callback: (tx: unknown) => unknown) => callback(tx)),
+    };
+    return { tx, prisma };
+  }
+
+  const run = async (setupResult: ReturnType<typeof setupAssign>) => {
+    const module = await Test.createTestingModule({
+      providers: [
+        VolunteersService,
+        { provide: PrismaService, useValue: setupResult.prisma },
+      ],
+    }).compile();
+    return module.get(VolunteersService).assign('s1', 'v1');
+  };
+
+  it('registers the volunteer', async () => {
+    const s = setupAssign();
+
+    await run(s);
+
+    expect(s.tx.shiftAssignment.create).toHaveBeenCalledWith({
+      data: { shiftId: 's1', volunteerId: 'v1' },
+    });
+  });
+
+  it('throws 404 for an unknown shift', async () => {
+    await expect(run(setupAssign({ shift: null }))).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('throws 409 when the shift is full', async () => {
+    const s = setupAssign({ taken: 2 });
+
+    await expect(run(s)).rejects.toBeInstanceOf(ConflictException);
+    expect(s.tx.shiftAssignment.create).not.toHaveBeenCalled();
+  });
+
+  it('throws 409 when already registered', async () => {
+    const s = setupAssign({ existing: { id: 'a0' } });
+
+    await expect(run(s)).rejects.toBeInstanceOf(ConflictException);
+    expect(s.tx.shiftAssignment.create).not.toHaveBeenCalled();
+  });
+
+  it('throws 409 on an overlap with another shift of the volunteer', async () => {
+    const s = setupAssign({ overlapping: { id: 'a9' } });
+
+    await expect(run(s)).rejects.toBeInstanceOf(ConflictException);
+    expect(s.tx.shiftAssignment.findFirst).toHaveBeenCalledWith({
+      where: {
+        volunteerId: 'v1',
+        shift: {
+          startsAt: { lt: shiftRow.endsAt },
+          endsAt: { gt: shiftRow.startsAt },
+        },
+      },
+    });
+    expect(s.tx.shiftAssignment.create).not.toHaveBeenCalled();
   });
 });

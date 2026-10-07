@@ -13,6 +13,7 @@ import {
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
@@ -63,6 +64,21 @@ export class VolunteersController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.volunteers.createShift(eventId, dto, user.id);
+  }
+
+  @Post('shifts/:id/assignments')
+  @Roles(Role.VOLUNTEER)
+  @ApiCreatedResponse({ description: 'Inscription enregistrée' })
+  @ApiForbiddenResponse({ description: 'Réservé aux bénévoles' })
+  @ApiNotFoundResponse({ description: 'Créneau introuvable' })
+  @ApiConflictResponse({
+    description: 'Créneau complet, déjà inscrit ou chevauchement',
+  })
+  assign(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.volunteers.assign(id, user.id);
   }
 
   @Patch('shifts/:id')
