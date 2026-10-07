@@ -33,6 +33,7 @@ const event = {
     },
   ],
   volunteerStatus: null,
+  volunteers: { required: 5, registered: 3, missing: 2 },
 };
 
 function logInAs(role: string) {
@@ -97,6 +98,70 @@ describe('EventsPage', () => {
     expect(screen.queryByText(/bénévol/)).toBeNull();
   });
 
+  it.each([
+    ['VOLUNTEER', true],
+    ['ORGANIZER', true],
+    ['PARTICIPANT', false],
+  ])('shows the shortage of volunteers to a %s: %s', async (role, shown) => {
+    logInAs(role);
+    renderAt('/', json([event]));
+
+    await screen.findByRole('link', { name: 'Gala' });
+
+    expect(screen.queryByText('Il manque 2 bénévole(s)') !== null).toBe(shown);
+  });
+
+  it('shows no shortage to a visitor, nor when the shifts are covered', async () => {
+    renderAt('/', json([event]));
+    await screen.findByRole('link', { name: 'Gala' });
+    expect(screen.queryByText(/Il manque/)).toBeNull();
+  });
+
+  it('shows no shortage on a covered event', async () => {
+    logInAs('VOLUNTEER');
+    renderAt(
+      '/',
+      json([
+        { ...event, volunteers: { required: 5, registered: 5, missing: 0 } },
+      ]),
+    );
+
+    await screen.findByRole('link', { name: 'Gala' });
+
+    expect(screen.queryByText(/Il manque/)).toBeNull();
+  });
+
+  it('links each organization bubble to its public page', async () => {
+    renderAt('/', json([event]));
+
+    const bubbles = await screen.findByRole('list', { name: 'Organisations' });
+
+    expect(
+      within(bubbles).getByRole('link', { name: 'BDE Nancy' }),
+    ).toHaveAttribute('href', '/organizations/o1');
+  });
+
+  it('filters on one organization from the query string, with a way back', async () => {
+    const fetch = renderAt('/?organization=o2', json([event]));
+
+    expect(
+      await screen.findByText('Organisation : Club Sport'),
+    ).toBeInTheDocument();
+    expect(fetch.mock.calls[0][0]).toContain('&organizationId=o2');
+    expect(
+      screen.getByRole('link', { name: 'Retirer le filtre par organisation' }),
+    ).toHaveAttribute('href', '/');
+  });
+
+  it('does not filter by default', async () => {
+    const fetch = renderAt('/', json([event]));
+
+    await screen.findByRole('link', { name: 'Gala' });
+
+    expect(fetch.mock.calls[0][0]).not.toContain('organizationId');
+    expect(screen.queryByText(/Organisation :/)).toBeNull();
+  });
+
   it('shows an empty state', async () => {
     renderAt('/', json([]));
 
@@ -131,6 +196,42 @@ describe('EventDetailPage', () => {
 
     expect(screen.getByText('BDE Nancy')).toBeInTheDocument();
     expect(screen.getByText('Club Sport')).toBeInTheDocument();
+  });
+
+  it('links each organization to its public page', async () => {
+    renderAt('/events/e1', json(event));
+
+    expect(
+      await screen.findByRole('link', { name: 'Club Sport' }),
+    ).toHaveAttribute('href', '/organizations/o2');
+  });
+
+  it('shows volunteers and organizers how many volunteers the shifts have and miss', async () => {
+    logInAs('VOLUNTEER');
+    renderAt('/events/e1', json(event));
+
+    expect(await screen.findByText(/3 sur 5/)).toBeInTheDocument();
+    expect(screen.getByText('Il manque 2 bénévole(s)')).toBeInTheDocument();
+  });
+
+  it('hides the volunteers line from a participant and when there is no shift', async () => {
+    logInAs('PARTICIPANT');
+    renderAt('/events/e1', json(event));
+    await screen.findByRole('heading', { name: 'Gala' });
+    expect(screen.queryByText('Bénévoles')).toBeNull();
+  });
+
+  it('hides the volunteers line when the event has no shift', async () => {
+    logInAs('ORGANIZER');
+    renderAt(
+      '/events/e1',
+      json({
+        ...event,
+        volunteers: { required: 0, registered: 0, missing: 0 },
+      }),
+    );
+    await screen.findByRole('heading', { name: 'Gala' });
+    expect(screen.queryByText('Bénévoles')).toBeNull();
   });
 
   it('shows the volunteer badge', async () => {

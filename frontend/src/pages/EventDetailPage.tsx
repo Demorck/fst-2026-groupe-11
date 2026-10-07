@@ -57,13 +57,33 @@ export default function EventDetailPage() {
         <dd>
           <ul className="flex flex-wrap gap-x-4 gap-y-1">
             {event.organizations.map((organization) => (
-              <li key={organization.id} className="flex items-center gap-2">
-                <OrganizationLogo organization={organization} />
-                {organization.name}
+              <li key={organization.id}>
+                <Link
+                  to={`/organizations/${organization.id}`}
+                  className="flex items-center gap-2 text-indigo-700 hover:underline"
+                >
+                  <OrganizationLogo organization={organization} />
+                  {organization.name}
+                </Link>
               </li>
             ))}
           </ul>
         </dd>
+        {(role === 'VOLUNTEER' || role === 'ORGANIZER') &&
+          event.volunteers.required > 0 && (
+            <>
+              <dt className="font-medium">Bénévoles</dt>
+              <dd>
+                {event.volunteers.registered} sur {event.volunteers.required}{' '}
+                inscrits
+                {event.volunteers.missing > 0 && (
+                  <span className="ml-2 font-medium text-amber-700">
+                    Il manque {event.volunteers.missing} bénévole(s)
+                  </span>
+                )}
+              </dd>
+            </>
+          )}
         <dt className="font-medium">Places</dt>
         <dd>
           {event.remainingSeats} restante(s) sur {event.capacity}

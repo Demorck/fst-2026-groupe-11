@@ -52,6 +52,8 @@ export interface EventWithSeats extends EventDetail {
   organizer: { id: string; name: string };
   remainingSeats: number;
   organizations: OrganizationSummary[];
+  /** Volunteers the shifts of the event need, have and still miss. */
+  volunteers: { required: number; registered: number; missing: number };
   /** Only for a logged in volunteer of one of the organizations, or already on a shift. */
   volunteerStatus: VolunteerStatus | null;
 }

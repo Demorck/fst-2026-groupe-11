@@ -1,10 +1,17 @@
 import { Link } from 'react-router';
+import { useSession } from '../../auth/session.ts';
 import OrganizationBubbles from '../../organizations/components/OrganizationBubbles.tsx';
 import VolunteerBadge from '../../organizations/components/VolunteerBadge.tsx';
 import { CATEGORY_LABELS, formatEventDate } from '../types.ts';
 import type { EventWithSeats } from '../types.ts';
 
 export default function EventCard({ event }: { event: EventWithSeats }) {
+  const role = useSession()?.user.role;
+  // The call for volunteers is for those who can answer it
+  const recruiting =
+    event.volunteers.missing > 0 &&
+    (role === 'VOLUNTEER' || role === 'ORGANIZER');
+
   return (
     <li className="rounded bg-white p-4 shadow">
       <Link
@@ -26,6 +33,11 @@ export default function EventCard({ event }: { event: EventWithSeats }) {
             : 'Complet'}
         </span>
       </p>
+      {recruiting && (
+        <p className="mt-2 text-sm font-medium text-amber-700">
+          Il manque {event.volunteers.missing} bénévole(s)
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <OrganizationBubbles organizations={event.organizations} />
         <VolunteerBadge status={event.volunteerStatus} />
