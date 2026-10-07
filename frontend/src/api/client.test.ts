@@ -29,4 +29,15 @@ describe('apiFetch', () => {
     await expect(apiFetch('/events')).rejects.toThrow();
     expect(localStorage.getItem('session')).toBeNull();
   });
+
+  it('returns nothing on a 204', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+    );
+
+    await expect(
+      apiFetch('/shifts/s1', { method: 'DELETE' }),
+    ).resolves.toBeUndefined();
+  });
 });
