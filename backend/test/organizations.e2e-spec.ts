@@ -31,7 +31,7 @@ describe('Organizations (e2e)', () => {
     event: { findUnique: vi.fn() },
     eventOrganization: { count: vi.fn(), findFirst: vi.fn() },
     organizationAuditLog: { create: vi.fn(), findMany: vi.fn() },
-    shiftAssignment: { deleteMany: vi.fn() },
+    shiftAssignment: { deleteMany: vi.fn(), findMany: vi.fn() },
     $transaction: vi.fn(),
   };
 
@@ -349,7 +349,7 @@ describe('Organizations (e2e)', () => {
         role: OrganizationRole.VOLUNTEER,
       });
       prisma.organizationMember.findMany.mockResolvedValue([]);
-      prisma.shiftAssignment.findMany = vi.fn().mockResolvedValue([]);
+      prisma.shiftAssignment.findMany.mockResolvedValue([]);
 
       const res = await api()
         .get(`/api/organizations/${ORG}/hours`)

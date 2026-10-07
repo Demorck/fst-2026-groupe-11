@@ -9,6 +9,7 @@ import { PrismaClient } from '../src/generated/prisma/client.js';
 import {
   EventCategory,
   MembershipStatus,
+  OrganizationAction,
   OrganizationRole,
   Role,
   TicketStatus,
@@ -49,6 +50,11 @@ const USERS = [
   {
     email: 'benevole3@gevent.test',
     name: 'Basile Bénévole',
+    role: Role.VOLUNTEER,
+  },
+  {
+    email: 'benevole4@gevent.test',
+    name: 'Béatrice Bénévole',
     role: Role.VOLUNTEER,
   },
   {
@@ -116,7 +122,8 @@ function logoPng(size: number, [r, g, b]: number[]) {
 }
 
 const { MANAGER, VOLUNTEER } = OrganizationRole;
-const { ACCEPTED, PENDING, DECLINED } = MembershipStatus;
+const { ACCEPTED, PENDING, DECLINED, CANCELLED, REMOVED, LEFT } =
+  MembershipStatus;
 
 // Members: [user, role, status]. Covers: co-management, a pending and a declined invitation,
 // a volunteer in two organizations, and an organization without logo (initials are shown instead).
@@ -132,6 +139,7 @@ const ORGANIZATIONS = [
       ['benevole1', VOLUNTEER, ACCEPTED],
       ['benevole2', VOLUNTEER, ACCEPTED],
       ['benevole3', VOLUNTEER, PENDING], // volunteer invitation to accept
+      ['benevole4', VOLUNTEER, LEFT], // left: her past hours stay on her attestation
     ],
   },
   {
@@ -143,6 +151,8 @@ const ORGANIZATIONS = [
       ['orga', MANAGER, ACCEPTED],
       ['benevole2', VOLUNTEER, ACCEPTED],
       ['benevole3', VOLUNTEER, ACCEPTED],
+      ['benevole1', VOLUNTEER, REMOVED], // removed by orga: past hours stay too
+      ['benevole4', VOLUNTEER, CANCELLED], // invitation withdrawn
     ],
   },
   {
@@ -153,9 +163,13 @@ const ORGANIZATIONS = [
     members: [
       ['orga2', MANAGER, ACCEPTED],
       ['benevole3', VOLUNTEER, DECLINED], // declined: can be invited again
+      ['benevole4', VOLUNTEER, PENDING], // invited 10 days ago: expired, to invite again
     ],
   },
 ] as const;
+
+// Invitations older than the 7 days of validity (organization key and user key)
+const EXPIRED_INVITATIONS = new Set(['num:benevole4']);
 
 // Event number -> organizations running it. The futsal tournament has two (two bubbles on its card).
 const EVENT_ORGANIZATIONS: Record<number, string[]> = {
@@ -261,6 +275,12 @@ const SHIFTS: [number, number, string, number, number, string[]][] = [
   [3, 2, 'Buvette', 3, 2 * HOUR, ['benevole1', 'benevole2', 'benevole3']], // covered
   [4, 2, 'Rangement', 2, 4 * HOUR, []], // nobody yet
   [5, 5, 'Accueil', 1, 0, ['benevole1']],
+  // Past shifts: hours and attestations (benevole1 and benevole4 have left or were removed, hours stay)
+  [6, 6, 'Accueil', 3, 0, ['benevole1', 'benevole2', 'benevole4']],
+  [7, 6, 'Rangement', 2, 3 * HOUR, ['benevole1', 'benevole4']],
+  [8, 7, 'Buvette', 2, 0, ['benevole1', 'benevole2']],
+  // Starts in a few hours and nobody yet: flagged as incomplete on the dashboard
+  [9, 5, 'Rangement', 2, 3 * HOUR, []],
 ];
 
 // [event number, participant, status, checked in]
@@ -322,7 +342,14 @@ async function main() {
       const ids = { organizationId: organization.id, userId: userId(user) };
       await prisma.organizationMember.upsert({
         where: { organizationId_userId: ids },
-        create: { ...ids, role, status },
+        create: {
+          ...ids,
+          role,
+          status,
+          ...(EXPIRED_INVITATIONS.has(`${key}:${user}`) && {
+            invitedAt: new Date(Date.now() - 10 * DAY),
+          }),
+        },
         // Keeps the answer given while testing an invitation
         update: { role },
       });
@@ -410,6 +437,40 @@ async function main() {
         checkedInAt: checkedIn ? new Date(start + 10 * 60 * 1000) : null,
       },
       // Keeps what was done while testing (new status, check-in)
+      update: {},
+    });
+  }
+
+  // The audit log has no natural key: fixed ids keep a rerun from duplicating the entries
+  const auditId = (n: number) =>
+    `cccccccc-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const AUDIT = [
+    [1, 'sport', OrganizationAction.MEMBER_REMOVED, 'orga', 'benevole1', 12],
+    [2, 'bde', OrganizationAction.MEMBER_LEFT, 'benevole4', 'benevole4', 20],
+    [
+      3,
+      'sport',
+      OrganizationAction.INVITATION_CANCELLED,
+      'orga',
+      'benevole4',
+      3,
+    ],
+  ] as const;
+  for (const [n, org, action, actor, target, daysAgo] of AUDIT) {
+    const data = {
+      organizationId: organizations.get(org)!,
+      action,
+      actorId: userId(actor),
+      targetUserId: userId(target),
+      details:
+        action === OrganizationAction.INVITATION_CANCELLED
+          ? undefined
+          : { removedShifts: 0 },
+      createdAt: new Date(Date.now() - daysAgo * DAY),
+    };
+    await prisma.organizationAuditLog.upsert({
+      where: { id: auditId(n) },
+      create: { id: auditId(n), ...data },
       update: {},
     });
   }
