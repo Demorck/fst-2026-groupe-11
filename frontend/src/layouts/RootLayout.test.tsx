@@ -69,6 +69,23 @@ describe('RootLayout header', () => {
     },
   );
 
+  it('shows the tickets link to a participant only', () => {
+    logIn('PARTICIPANT');
+    const { unmount } = renderLayout();
+
+    expect(screen.getByRole('link', { name: 'Mes billets' })).toHaveAttribute(
+      'href',
+      '/me/tickets',
+    );
+
+    unmount();
+    localStorage.clear();
+    logIn('ORGANIZER');
+    renderLayout();
+
+    expect(screen.queryByRole('link', { name: 'Mes billets' })).toBeNull();
+  });
+
   it('hides the organizer links when logged out', () => {
     renderLayout();
 

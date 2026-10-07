@@ -11,3 +11,17 @@ export interface Ticket {
   createdAt: string;
   updatedAt: string;
 }
+
+/** A ticket of `GET /me/tickets`, with the main info of its event. */
+export interface MyTicket extends Pick<
+  Ticket,
+  'id' | 'code' | 'status' | 'checkedInAt' | 'createdAt'
+> {
+  event: {
+    id: string;
+    title: string;
+    startsAt: string;
+    endsAt: string;
+    location: string;
+  };
+}
