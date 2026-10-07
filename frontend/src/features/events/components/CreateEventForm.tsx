@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { SyntheticEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import TextField from '../../../components/TextField.tsx';
 import { useSubmit } from '../../auth/hooks/useSubmit.ts';
+import { getMyOrganizations } from '../../organizations/api.ts';
+import type { MyOrganization } from '../../organizations/types.ts';
 import { createEvent } from '../api.ts';
 import { CATEGORY_LABELS, EVENT_CATEGORIES } from '../types.ts';
 import type { EventCategory } from '../types.ts';
@@ -20,12 +22,19 @@ export default function CreateEventForm() {
   const [capacity, setCapacity] = useState('');
   const [category, setCategory] = useState<EventCategory>('CONFERENCE');
   const [imageUrl, setImageUrl] = useState('');
+  // Organizations the author manages: an event always belongs to at least one of them
+  const [managed, setManaged] = useState<MyOrganization[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
   const { submit, pending, error } = useSubmit(async () => {
     // datetime-local has no timezone, Date reads it as local time
     const start = new Date(startsAt);
     const end = new Date(endsAt);
     if (end <= start) {
       throw new Error('La fin doit être après le début.');
+    }
+    if (selected.length === 0) {
+      throw new Error('Choisissez au moins une organisation.');
     }
     const event = await createEvent({
       title: title.trim(),
@@ -36,13 +45,59 @@ export default function CreateEventForm() {
       capacity: Number(capacity),
       category,
       imageUrl: imageUrl.trim() || undefined,
+      organizationIds: selected,
     });
     await navigate(`/events/${event.id}`);
   });
 
+  useEffect(() => {
+    getMyOrganizations()
+      .then((mine) => {
+        const mineManaged = mine.filter(({ role }) => role === 'MANAGER');
+        setManaged(mineManaged);
+        // A single organization needs no choice
+        if (mineManaged.length === 1) setSelected([mineManaged[0].id]);
+      })
+      .catch((err: Error) => setLoadError(err.message));
+  }, []);
+
+  const toggle = (id: string) =>
+    setSelected((ids) =>
+      ids.includes(id) ? ids.filter((other) => other !== id) : [...ids, id],
+    );
+
   function onSubmit(event: SyntheticEvent) {
     event.preventDefault();
     void submit();
+  }
+
+  if (loadError) {
+    return (
+      <p role="alert" className="text-red-600">
+        {loadError}
+      </p>
+    );
+  }
+  if (!managed) return <p>Chargement...</p>;
+  if (managed.length === 0) {
+    return (
+      <div className="min-w-0 flex-[999_1_520px] space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-7">
+        <p className="font-semibold">
+          Vous ne gérez aucune organisation pour l'instant.
+        </p>
+        <p>
+          Un événement est toujours rattaché à une ou plusieurs organisations :
+          créez la vôtre, ou acceptez l'invitation d'un autre gestionnaire,
+          avant de créer un événement.
+        </p>
+        <Link
+          to="/organizations"
+          className="inline-block rounded-[10px] bg-indigo-600 px-4 py-2 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+        >
+          Gérer mes organisations
+        </Link>
+      </div>
+    );
   }
 
   return (
@@ -50,6 +105,22 @@ export default function CreateEventForm() {
       onSubmit={onSubmit}
       className="min-w-0 flex-[999_1_520px] space-y-5 rounded-xl border border-gray-200 bg-white p-7"
     >
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium">
+          Organisations qui participent
+        </legend>
+        {managed.map(({ id, name }) => (
+          <label key={id} className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={selected.includes(id)}
+              onChange={() => toggle(id)}
+              className="size-4 accent-indigo-600"
+            />
+            {name}
+          </label>
+        ))}
+      </fieldset>
       <TextField
         label="Titre"
         required

@@ -27,9 +27,14 @@ export interface CreateEventInput {
   capacity: number;
   category: EventCategory;
   imageUrl?: string;
+  /** At least one, among the organizations the author manages. */
+  organizationIds: string[];
 }
 
-export interface EventDetail extends Omit<CreateEventInput, 'imageUrl'> {
+export interface EventDetail extends Omit<
+  CreateEventInput,
+  'imageUrl' | 'organizationIds'
+> {
   id: string;
   organizerId: string;
   imageUrl: string | null;
