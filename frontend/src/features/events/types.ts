@@ -36,3 +36,15 @@ export interface EventDetail extends Omit<CreateEventInput, 'imageUrl'> {
   createdAt: string;
   updatedAt: string;
 }
+
+/** Event as returned by GET /events and GET /events/:id. */
+export interface EventWithSeats extends EventDetail {
+  organizer: { id: string; name: string };
+  remainingSeats: number;
+}
+
+export const formatEventDate = (iso: string) =>
+  new Date(iso).toLocaleString('fr-FR', {
+    dateStyle: 'full',
+    timeStyle: 'short',
+  });
