@@ -81,6 +81,12 @@ describe('ReserveButton', () => {
     await clickConfirm();
 
     expect(await screen.findByRole('status')).toHaveTextContent('B2H9M3V3');
+    expect(
+      screen.getByRole('img', { name: 'QR code du billet B2H9M3V3' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Voir mes billets' }),
+    ).toHaveAttribute('href', '/me/tickets');
     const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('/api/events/e1/tickets');
     expect(init.method).toBe('POST');

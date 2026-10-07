@@ -69,6 +69,25 @@ describe('RootLayout header', () => {
     },
   );
 
+  it.each(['PARTICIPANT', 'VOLUNTEER', 'ORGANIZER'])(
+    'shows the tickets link to a %s',
+    (role) => {
+      logIn(role);
+      renderLayout();
+
+      expect(screen.getByRole('link', { name: 'Mes billets' })).toHaveAttribute(
+        'href',
+        '/me/tickets',
+      );
+    },
+  );
+
+  it('hides the tickets link when logged out', () => {
+    renderLayout();
+
+    expect(screen.queryByRole('link', { name: 'Mes billets' })).toBeNull();
+  });
+
   it('hides the organizer links when logged out', () => {
     renderLayout();
 

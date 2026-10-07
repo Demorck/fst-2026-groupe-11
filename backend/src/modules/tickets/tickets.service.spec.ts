@@ -156,3 +156,26 @@ describe('TicketsService.reserve', () => {
     });
   });
 });
+
+describe('TicketsService.listForUser', () => {
+  it('lists the active tickets of the user ordered by event start', async () => {
+    const findMany = vi.fn().mockResolvedValue([{ id: 't1' }]);
+    const module = await Test.createTestingModule({
+      providers: [
+        TicketsService,
+        { provide: PrismaService, useValue: { ticket: { findMany } } },
+      ],
+    }).compile();
+
+    const result = await module.get(TicketsService).listForUser(participantId);
+
+    expect(result).toEqual([{ id: 't1' }]);
+    const args = findMany.mock.calls[0][0];
+    expect(args.where).toEqual({
+      participantId,
+      status: TicketStatus.RESERVED,
+    });
+    expect(args.orderBy).toEqual({ event: { startsAt: 'asc' } });
+    expect(args.select.event.select.title).toBe(true);
+  });
+});

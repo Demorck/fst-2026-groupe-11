@@ -8,6 +8,7 @@ import EventDetailPage from './pages/EventDetailPage.tsx';
 import EventsPage from './pages/EventsPage.tsx';
 import HealthPage from './pages/HealthPage.tsx';
 import LoginPage from './pages/LoginPage.tsx';
+import MyTicketsPage from './pages/MyTicketsPage.tsx';
 import NotFoundPage from './pages/NotFoundPage.tsx';
 import RegisterPage from './pages/RegisterPage.tsx';
 import VolunteerShiftsPage from './pages/VolunteerShiftsPage.tsx';
@@ -28,6 +29,10 @@ export const router = createBrowserRouter([
           { path: 'events/:eventId/checkin', element: <CheckinPage /> },
           { path: 'dashboard', element: <DashboardPage /> },
         ],
+      },
+      {
+        element: <RequireAuth />,
+        children: [{ path: 'me/tickets', element: <MyTicketsPage /> }],
       },
       {
         element: <RequireAuth roles={['VOLUNTEER', 'ORGANIZER']} />,

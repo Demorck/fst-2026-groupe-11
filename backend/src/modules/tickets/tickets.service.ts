@@ -13,6 +13,30 @@ const MAX_CODE_ATTEMPTS = 3;
 export class TicketsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Active tickets of a user, ordered by event start. */
+  listForUser(participantId: string) {
+    return this.prisma.ticket.findMany({
+      where: { participantId, status: TicketStatus.RESERVED },
+      orderBy: { event: { startsAt: 'asc' } },
+      select: {
+        id: true,
+        code: true,
+        status: true,
+        checkedInAt: true,
+        createdAt: true,
+        event: {
+          select: {
+            id: true,
+            title: true,
+            startsAt: true,
+            endsAt: true,
+            location: true,
+          },
+        },
+      },
+    });
+  }
+
   async reserve(eventId: string, participantId: string) {
     for (let attempt = 1; ; attempt++) {
       try {
