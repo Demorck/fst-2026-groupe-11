@@ -14,17 +14,10 @@ import { PrismaService } from '@/prisma/prisma.service.js';
 import { CreateOrganizationDto } from './dto/create-organization.dto.js';
 import { UpdateOrganizationDto } from './dto/update-organization.dto.js';
 import type { ImageType } from './image-type.js';
+import { omitLogo, toPublic } from './public-organization.js';
 
 /** What a volunteer can do on an event, from the organizations that run it. */
 export type VolunteerStatus = 'ASSIGNED' | 'AVAILABLE';
-
-// The logo can weigh 512 KB: it is never loaded with the other fields, `hasLogo` tells whether to fetch it
-const omitLogo = { logo: true } as const;
-
-const toPublic = <T extends { logoContentType: string | null }>({
-  logoContentType,
-  ...organization
-}: T) => ({ ...organization, hasLogo: logoContentType !== null });
 
 const isUniqueViolation = (error: unknown) =>
   (error as { code?: string }).code === 'P2002';

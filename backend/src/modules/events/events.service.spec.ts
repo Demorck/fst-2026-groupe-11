@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { EventCategory } from '../../generated/prisma/enums.js';
+import { EventCategory, Role } from '../../generated/prisma/enums.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { OrganizationsService } from '../organizations/organizations.service.js';
 import { EventsService } from './events.service.js';
@@ -22,13 +22,20 @@ const dto = {
 
 async function build(
   event: Record<string, ReturnType<typeof vi.fn>>,
-  assertManagesAll = vi.fn().mockResolvedValue(undefined),
+  organizations: Record<string, ReturnType<typeof vi.fn>> = {},
 ) {
   const module = await Test.createTestingModule({
     providers: [
       EventsService,
       { provide: PrismaService, useValue: { event } },
-      { provide: OrganizationsService, useValue: { assertManagesAll } },
+      {
+        provide: OrganizationsService,
+        useValue: {
+          assertManagesAll: vi.fn().mockResolvedValue(undefined),
+          volunteerStatuses: vi.fn().mockResolvedValue(new Map()),
+          ...organizations,
+        },
+      },
     ],
   }).compile();
   return module.get(EventsService);
@@ -67,7 +74,7 @@ describe('EventsService', () => {
       .mockRejectedValue(new ForbiddenException());
 
     await expect(
-      (await build({ create }, assertManagesAll)).create(dto, 'user-1'),
+      (await build({ create }, { assertManagesAll })).create(dto, 'user-1'),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(assertManagesAll).toHaveBeenCalledWith('user-1', ['o1', 'o2']);
     expect(create).not.toHaveBeenCalled();
@@ -86,14 +93,24 @@ describe('EventsService', () => {
   it('lists filtered events by date with remaining seats', async () => {
     const findMany = vi
       .fn()
-      .mockResolvedValue([{ id: 'e1', capacity: 50, _count: { tickets: 12 } }]);
+      .mockResolvedValue([
+        { id: 'e1', capacity: 50, _count: { tickets: 12 }, organizations: [] },
+      ]);
     const from = new Date('2026-12-01');
 
     const events = await (
       await build({ findMany })
     ).findAll({ from, category: EventCategory.PARTY });
 
-    expect(events).toEqual([{ id: 'e1', capacity: 50, remainingSeats: 38 }]);
+    expect(events).toEqual([
+      {
+        id: 'e1',
+        capacity: 50,
+        remainingSeats: 38,
+        organizations: [],
+        volunteerStatus: null,
+      },
+    ]);
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
@@ -110,6 +127,7 @@ describe('EventsService', () => {
       id: 'e1',
       capacity: 50,
       organizer: { id: 'org-1', name: 'Asso' },
+      organizations: [],
       _count: { tickets: 50 },
     });
 
@@ -117,7 +135,94 @@ describe('EventsService', () => {
       id: 'e1',
       capacity: 50,
       organizer: { id: 'org-1', name: 'Asso' },
+      organizations: [],
       remainingSeats: 0,
+      volunteerStatus: null,
+    });
+  });
+
+  describe('organizations on events', () => {
+    const rows = [
+      {
+        id: 'e1',
+        capacity: 10,
+        _count: { tickets: 0 },
+        organizations: [
+          {
+            organization: {
+              id: 'o1',
+              name: 'BDE',
+              logoContentType: 'image/png',
+            },
+          },
+          { organization: { id: 'o2', name: 'Sport', logoContentType: null } },
+        ],
+      },
+      { id: 'e2', capacity: 10, _count: { tickets: 0 }, organizations: [] },
+    ];
+
+    it('lists the organizations of each event, with hasLogo and no logo bytes', async () => {
+      const findMany = vi.fn().mockResolvedValue(rows);
+
+      const [first] = await (await build({ findMany })).findAll({});
+
+      expect(first.organizations).toEqual([
+        { id: 'o1', name: 'BDE', hasLogo: true },
+        { id: 'o2', name: 'Sport', hasLogo: false },
+      ]);
+      expect(
+        findMany.mock.calls[0][0].include.organizations.select.organization,
+      ).toEqual({
+        omit: { logo: true },
+      });
+    });
+
+    it('gives a logged in volunteer the status of each event', async () => {
+      const findMany = vi.fn().mockResolvedValue(rows);
+      const volunteerStatuses = vi
+        .fn()
+        .mockResolvedValue(new Map([['e1', 'ASSIGNED']]));
+
+      const events = await (
+        await build({ findMany }, { volunteerStatuses })
+      ).findAll({}, { id: 'u1', role: Role.VOLUNTEER });
+
+      expect(volunteerStatuses).toHaveBeenCalledWith('u1', ['e1', 'e2']);
+      expect(events.map((event) => event.volunteerStatus)).toEqual([
+        'ASSIGNED',
+        null,
+      ]);
+    });
+
+    it.each([
+      ['a participant', { id: 'u1', role: Role.PARTICIPANT }],
+      ['an organizer', { id: 'u1', role: Role.ORGANIZER }],
+      ['a visitor', undefined],
+    ])('does not compute any volunteer status for %s', async (_who, user) => {
+      const findMany = vi.fn().mockResolvedValue(rows);
+      const volunteerStatuses = vi.fn();
+
+      const events = await (
+        await build({ findMany }, { volunteerStatuses })
+      ).findAll({}, user);
+
+      expect(volunteerStatuses).not.toHaveBeenCalled();
+      expect(events.every((event) => event.volunteerStatus === null)).toBe(
+        true,
+      );
+    });
+
+    it('gives the volunteer status on the event detail too', async () => {
+      const findUnique = vi.fn().mockResolvedValue(rows[0]);
+      const volunteerStatuses = vi
+        .fn()
+        .mockResolvedValue(new Map([['e1', 'AVAILABLE']]));
+
+      const event = await (
+        await build({ findUnique }, { volunteerStatuses })
+      ).findOne('e1', { id: 'u1', role: Role.VOLUNTEER });
+
+      expect(event.volunteerStatus).toBe('AVAILABLE');
     });
   });
 
