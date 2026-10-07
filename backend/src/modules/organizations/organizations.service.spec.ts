@@ -7,6 +7,7 @@ import {
 import { Test } from '@nestjs/testing';
 import {
   MembershipStatus,
+  OrganizationAction,
   OrganizationRole,
   Role,
 } from '../../generated/prisma/enums.js';
@@ -29,15 +30,22 @@ function setup() {
     organizationMember: {
       findMany: vi.fn(),
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       update: vi.fn(),
       upsert: vi.fn(),
       count: vi.fn(),
     },
+    organizationAuditLog: { create: vi.fn(), findMany: vi.fn() },
     user: { findUnique: vi.fn() },
     event: { findUnique: vi.fn(), findMany: vi.fn() },
-    eventOrganization: { count: vi.fn() },
+    eventOrganization: { count: vi.fn(), findFirst: vi.fn() },
     shiftAssignment: { deleteMany: vi.fn() },
+    $transaction: vi.fn(),
   };
+  // Both forms: a callback receives the same mocks, an array is already a list of calls
+  prisma.$transaction.mockImplementation((arg: unknown) =>
+    typeof arg === 'function' ? arg(prisma) : Promise.all(arg as unknown[]),
+  );
   return prisma;
 }
 
@@ -143,7 +151,11 @@ describe('OrganizationsService', () => {
       'throws 409 when the user is already %s',
       async (status) => {
         await expect(
-          invite(setup(), { id: 'u2', role: Role.VOLUNTEER }, { status }),
+          invite(
+            setup(),
+            { id: 'u2', role: Role.VOLUNTEER },
+            { status, invitedAt: new Date() },
+          ),
         ).rejects.toBeInstanceOf(ConflictException);
       },
     );
@@ -188,6 +200,7 @@ describe('OrganizationsService', () => {
         id: 'm1',
         userId: 'u2',
         status: MembershipStatus.PENDING,
+        invitedAt: new Date(),
       });
       prisma.organizationMember.update.mockResolvedValue({ id: 'm1' });
 
@@ -239,6 +252,7 @@ describe('OrganizationsService', () => {
       userId,
       role,
       status,
+      invitedAt: new Date(),
       user: { id: userId, name: `Name ${userId}`, email: `${userId}@x.fr` },
     });
     const organization = {
@@ -412,10 +426,16 @@ describe('OrganizationsService', () => {
   });
 
   describe('removeVolunteerParticipation', () => {
-    it('removes the volunteer from every shift of the event', async () => {
+    const asSharedOrganization = (prisma: ReturnType<typeof setup>) => {
+      prisma.event.findUnique.mockResolvedValue({ id: 'e1', title: 'Futsal' });
+      prisma.eventOrganization.findFirst.mockResolvedValue({
+        organizationId: 'o1',
+      });
+    };
+
+    it('removes the volunteer from every shift of the event and logs it', async () => {
       const prisma = setup();
-      prisma.event.findUnique.mockResolvedValue({ id: 'e1' });
-      prisma.eventOrganization.count.mockResolvedValue(1);
+      asSharedOrganization(prisma);
       prisma.shiftAssignment.deleteMany.mockResolvedValue({ count: 2 });
 
       const result = await (
@@ -426,12 +446,22 @@ describe('OrganizationsService', () => {
       expect(prisma.shiftAssignment.deleteMany).toHaveBeenCalledWith({
         where: { volunteerId: 'vol', shift: { eventId: 'e1' } },
       });
+      expect(prisma.organizationAuditLog.create).toHaveBeenCalledWith({
+        data: {
+          organizationId: 'o1',
+          action: OrganizationAction.PARTICIPATION_REMOVED,
+          actorId: 'boss',
+          targetUserId: 'vol',
+          eventId: 'e1',
+          details: { eventTitle: 'Futsal', removedShifts: 2 },
+        },
+      });
     });
 
     it('throws 403 when no organization of the manager has this volunteer', async () => {
       const prisma = setup();
-      prisma.event.findUnique.mockResolvedValue({ id: 'e1' });
-      prisma.eventOrganization.count.mockResolvedValue(0);
+      prisma.event.findUnique.mockResolvedValue({ id: 'e1', title: 'Futsal' });
+      prisma.eventOrganization.findFirst.mockResolvedValue(null);
 
       await expect(
         (await build(prisma)).removeVolunteerParticipation('boss', 'e1', 'vol'),
@@ -439,19 +469,329 @@ describe('OrganizationsService', () => {
       expect(prisma.shiftAssignment.deleteMany).not.toHaveBeenCalled();
     });
 
-    it('throws 404 for an unknown event or a volunteer not registered', async () => {
+    it('throws 404 for an unknown event, and logs nothing for a volunteer not registered', async () => {
       const prisma = setup();
       prisma.event.findUnique.mockResolvedValue(null);
       await expect(
         (await build(prisma)).removeVolunteerParticipation('boss', 'e1', 'vol'),
       ).rejects.toBeInstanceOf(NotFoundException);
 
-      prisma.event.findUnique.mockResolvedValue({ id: 'e1' });
-      prisma.eventOrganization.count.mockResolvedValue(1);
+      asSharedOrganization(prisma);
       prisma.shiftAssignment.deleteMany.mockResolvedValue({ count: 0 });
       await expect(
         (await build(prisma)).removeVolunteerParticipation('boss', 'e1', 'vol'),
       ).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.organizationAuditLog.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('invitation lifecycle', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const pending = (ageDays: number) => ({
+      id: 'm1',
+      userId: 'u2',
+      status: MembershipStatus.PENDING,
+      invitedAt: new Date(Date.now() - ageDays * DAY),
+    });
+
+    it('lists only the invitations younger than 7 days', async () => {
+      const prisma = setup();
+      prisma.organizationMember.findMany.mockResolvedValue([]);
+
+      await (await build(prisma)).listInvitations('u2');
+
+      const { where } = prisma.organizationMember.findMany.mock.calls[0][0];
+      const cutoff = where.invitedAt.gt as Date;
+      expect(Date.now() - cutoff.getTime()).toBeGreaterThan(6.99 * DAY);
+      expect(Date.now() - cutoff.getTime()).toBeLessThan(7.01 * DAY);
+    });
+
+    it.each(['accept', 'decline'] as const)(
+      'refuses to %s an expired invitation with 409',
+      async (answer) => {
+        const prisma = setup();
+        prisma.organizationMember.findUnique.mockResolvedValue(pending(8));
+
+        await expect((await build(prisma))[answer]('m1', 'u2')).rejects.toThrow(
+          'Invitation expired',
+        );
+        expect(prisma.organizationMember.update).not.toHaveBeenCalled();
+      },
+    );
+
+    it('invites again someone whose invitation expired, restarting the 7 days', async () => {
+      const prisma = setup();
+      asManager(prisma);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u2',
+        role: Role.VOLUNTEER,
+      });
+      prisma.organizationMember.findUnique.mockResolvedValueOnce(pending(10));
+      prisma.organizationMember.upsert.mockResolvedValue({ id: 'm1' });
+
+      await (await build(prisma)).invite('o1', 'b@x.fr', 'u1');
+
+      const { update } = prisma.organizationMember.upsert.mock.calls[0][0];
+      expect(update.status).toBe(MembershipStatus.PENDING);
+      expect(Date.now() - update.invitedAt.getTime()).toBeLessThan(1000);
+    });
+
+    it.each([
+      MembershipStatus.CANCELLED,
+      MembershipStatus.REMOVED,
+      MembershipStatus.LEFT,
+    ])('invites again someone whose membership is %s', async (status) => {
+      const prisma = setup();
+      asManager(prisma);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'u2',
+        role: Role.VOLUNTEER,
+      });
+      prisma.organizationMember.findUnique.mockResolvedValueOnce({
+        status,
+        invitedAt: new Date(),
+      });
+      prisma.organizationMember.upsert.mockResolvedValue({ id: 'm1' });
+
+      await (await build(prisma)).invite('o1', 'b@x.fr', 'u1');
+
+      expect(prisma.organizationMember.upsert).toHaveBeenCalled();
+    });
+
+    it('cancels a pending invitation and logs it', async () => {
+      const prisma = setup();
+      asManager(prisma);
+      prisma.organizationMember.findFirst.mockResolvedValue(pending(1));
+
+      await (await build(prisma)).cancelInvitation('o1', 'm1', 'boss');
+
+      expect(prisma.organizationMember.update).toHaveBeenCalledWith({
+        where: { id: 'm1' },
+        data: { status: MembershipStatus.CANCELLED },
+      });
+      expect(prisma.organizationAuditLog.create.mock.calls[0][0].data).toEqual({
+        organizationId: 'o1',
+        action: OrganizationAction.INVITATION_CANCELLED,
+        actorId: 'boss',
+        targetUserId: 'u2',
+      });
+    });
+
+    it('refuses to cancel an invitation that is not pending, or unknown', async () => {
+      const prisma = setup();
+      asManager(prisma);
+      prisma.organizationMember.findFirst.mockResolvedValue({
+        ...pending(1),
+        status: MembershipStatus.ACCEPTED,
+      });
+      await expect(
+        (await build(prisma)).cancelInvitation('o1', 'm1', 'boss'),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      const missing = setup();
+      asManager(missing);
+      missing.organizationMember.findFirst.mockResolvedValue(null);
+      await expect(
+        (await build(missing)).cancelInvitation('o1', 'm1', 'boss'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('ending a membership', () => {
+    const volunteer = {
+      id: 'm2',
+      userId: 'vol',
+      role: OrganizationRole.VOLUNTEER,
+      status: MembershipStatus.ACCEPTED,
+    };
+
+    it('removes a member, takes them off their upcoming shifts and logs it', async () => {
+      const prisma = setup();
+      asManager(prisma);
+      prisma.organizationMember.findFirst.mockResolvedValue(volunteer);
+      prisma.shiftAssignment.deleteMany.mockResolvedValue({ count: 3 });
+
+      const result = await (
+        await build(prisma)
+      ).removeMember('o1', 'm2', 'boss');
+
+      expect(result).toEqual({ removedShifts: 3 });
+      expect(prisma.organizationMember.update).toHaveBeenCalledWith({
+        where: { id: 'm2' },
+        data: { status: MembershipStatus.REMOVED },
+      });
+      expect(
+        prisma.organizationAuditLog.create.mock.calls[0][0].data,
+      ).toMatchObject({
+        action: OrganizationAction.MEMBER_REMOVED,
+        actorId: 'boss',
+        targetUserId: 'vol',
+        details: { removedShifts: 3 },
+      });
+    });
+
+    it('only removes upcoming shifts that no other organization of the member covers', async () => {
+      const prisma = setup();
+      asManager(prisma);
+      prisma.organizationMember.findFirst.mockResolvedValue(volunteer);
+      prisma.shiftAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+      await (await build(prisma)).removeMember('o1', 'm2', 'boss');
+
+      const { where } = prisma.shiftAssignment.deleteMany.mock.calls[0][0];
+      expect(where.volunteerId).toBe('vol');
+      expect(where.shift.startsAt.gt).toBeInstanceOf(Date);
+      expect(where.shift.event.organizations).toEqual({
+        some: { organizationId: 'o1' },
+      });
+      // the update runs first, so 'o1' is no longer one of the member's organizations
+      expect(
+        prisma.organizationMember.update.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        prisma.shiftAssignment.deleteMany.mock.invocationCallOrder[0],
+      );
+      expect(
+        where.shift.event.NOT.organizations.some.organization.members.some,
+      ).toEqual({
+        userId: 'vol',
+        role: OrganizationRole.VOLUNTEER,
+        status: MembershipStatus.ACCEPTED,
+      });
+    });
+
+    it('refuses to remove oneself, an unknown or former member', async () => {
+      const prisma = setup();
+      asManager(prisma);
+      prisma.organizationMember.findFirst.mockResolvedValue({
+        ...volunteer,
+        userId: 'boss',
+      });
+      await expect(
+        (await build(prisma)).removeMember('o1', 'm2', 'boss'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      const gone = setup();
+      asManager(gone);
+      gone.organizationMember.findFirst.mockResolvedValue({
+        ...volunteer,
+        status: MembershipStatus.LEFT,
+      });
+      await expect(
+        (await build(gone)).removeMember('o1', 'm2', 'boss'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('lets a member leave', async () => {
+      const prisma = setup();
+      prisma.organizationMember.findUnique.mockResolvedValue(volunteer);
+      prisma.shiftAssignment.deleteMany.mockResolvedValue({ count: 1 });
+
+      await (await build(prisma)).leave('o1', 'vol');
+
+      expect(prisma.organizationMember.update).toHaveBeenCalledWith({
+        where: { id: 'm2' },
+        data: { status: MembershipStatus.LEFT },
+      });
+      expect(
+        prisma.organizationAuditLog.create.mock.calls[0][0].data,
+      ).toMatchObject({
+        action: OrganizationAction.MEMBER_LEFT,
+        actorId: 'vol',
+        targetUserId: 'vol',
+      });
+    });
+
+    it.each([
+      [
+        'removing',
+        (service: OrganizationsService) =>
+          service.removeMember('o1', 'm1', 'boss'),
+      ],
+      [
+        'leaving',
+        (service: OrganizationsService) => service.leave('o1', 'boss2'),
+      ],
+    ])('refuses to lose the last manager by %s', async (_how, act) => {
+      const prisma = setup();
+      asManager(prisma);
+      const lastManager = {
+        id: 'm1',
+        userId: 'boss2',
+        role: OrganizationRole.MANAGER,
+        status: MembershipStatus.ACCEPTED,
+      };
+      prisma.organizationMember.findFirst.mockResolvedValue(lastManager);
+      prisma.organizationMember.findUnique.mockResolvedValue(lastManager);
+      prisma.organizationMember.count.mockResolvedValue(0);
+
+      await expect(act(await build(prisma))).rejects.toThrow(
+        'Last manager of the organization',
+      );
+      expect(prisma.organizationMember.update).not.toHaveBeenCalled();
+    });
+
+    it('lets a manager leave when another manager remains', async () => {
+      const prisma = setup();
+      prisma.organizationMember.findUnique.mockResolvedValue({
+        id: 'm1',
+        userId: 'boss',
+        role: OrganizationRole.MANAGER,
+        status: MembershipStatus.ACCEPTED,
+      });
+      prisma.organizationMember.count.mockResolvedValue(1);
+      prisma.shiftAssignment.deleteMany.mockResolvedValue({ count: 0 });
+
+      await expect((await build(prisma)).leave('o1', 'boss')).resolves.toEqual({
+        removedShifts: 0,
+      });
+    });
+
+    it('refuses to leave an organization one does not belong to', async () => {
+      const prisma = setup();
+      prisma.organizationMember.findUnique.mockResolvedValue({
+        ...volunteer,
+        status: MembershipStatus.REMOVED,
+      });
+
+      await expect(
+        (await build(prisma)).leave('o1', 'vol'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('audit log', () => {
+    it('gives managers the latest entries with who and whom', async () => {
+      const prisma = setup();
+      asManager(prisma);
+      prisma.organizationAuditLog.findMany.mockResolvedValue([
+        {
+          id: 'a1',
+          action: OrganizationAction.MEMBER_REMOVED,
+          actor: { id: 'boss', name: 'Océane' },
+          targetUser: { id: 'vol', name: 'Bastien' },
+        },
+      ]);
+
+      const entries = await (await build(prisma)).listAudit('o1', 'boss');
+
+      expect(entries[0].target).toEqual({ id: 'vol', name: 'Bastien' });
+      expect(entries[0]).not.toHaveProperty('targetUser');
+      const args = prisma.organizationAuditLog.findMany.mock.calls[0][0];
+      expect(args.take).toBe(100);
+      expect(args.orderBy).toEqual({ createdAt: 'desc' });
+    });
+
+    it('is refused to a volunteer', async () => {
+      const prisma = setup();
+      prisma.organization.findUnique.mockResolvedValue({ id: 'o1' });
+      prisma.organizationMember.findUnique.mockResolvedValue({
+        status: MembershipStatus.ACCEPTED,
+        role: OrganizationRole.VOLUNTEER,
+      });
+
+      await expect(
+        (await build(prisma)).listAudit('o1', 'vol'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 });

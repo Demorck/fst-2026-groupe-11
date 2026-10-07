@@ -21,10 +21,18 @@ describe('Organizations (e2e)', () => {
   let jwt: JwtService;
   const prisma = {
     organization: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
-    organizationMember: { findMany: vi.fn(), findUnique: vi.fn() },
+    organizationMember: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+      count: vi.fn(),
+    },
     event: { findUnique: vi.fn() },
-    eventOrganization: { count: vi.fn() },
+    eventOrganization: { count: vi.fn(), findFirst: vi.fn() },
+    organizationAuditLog: { create: vi.fn(), findMany: vi.fn() },
     shiftAssignment: { deleteMany: vi.fn() },
+    $transaction: vi.fn(),
   };
 
   beforeEach(async () => {
@@ -44,6 +52,9 @@ describe('Organizations (e2e)', () => {
     await app.init();
     jwt = app.get(JwtService);
     vi.clearAllMocks();
+    prisma.$transaction.mockImplementation((arg: unknown) =>
+      typeof arg === 'function' ? arg(prisma) : Promise.all(arg as unknown[]),
+    );
   });
 
   afterEach(async () => {
@@ -186,14 +197,104 @@ describe('Organizations (e2e)', () => {
     });
 
     it('removes the participation of a volunteer of a shared organization', async () => {
-      prisma.event.findUnique.mockResolvedValue({ id: EVENT });
-      prisma.eventOrganization.count.mockResolvedValue(1);
+      prisma.event.findUnique.mockResolvedValue({ id: EVENT, title: 'Gala' });
+      prisma.eventOrganization.findFirst.mockResolvedValue({
+        organizationId: ORG,
+      });
       prisma.shiftAssignment.deleteMany.mockResolvedValue({ count: 1 });
 
       const res = await remove(Role.ORGANIZER);
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ removed: 1 });
+    });
+  });
+
+  describe('membership lifecycle', () => {
+    const MEMBER = '44444444-4444-4444-8444-444444444444';
+    const asManager = () => {
+      prisma.organization.findUnique.mockResolvedValue({ id: ORG });
+      prisma.organizationMember.findUnique.mockResolvedValue({
+        status: MembershipStatus.ACCEPTED,
+        role: OrganizationRole.MANAGER,
+      });
+    };
+
+    it('lets a manager cancel an invitation (204) and logs it', async () => {
+      asManager();
+      prisma.organizationMember.findFirst.mockResolvedValue({
+        id: MEMBER,
+        userId: 'u9',
+        status: MembershipStatus.PENDING,
+      });
+      prisma.organizationMember.update.mockResolvedValue({});
+
+      const res = await api()
+        .delete(`/api/organizations/${ORG}/invitations/${MEMBER}`)
+        .set('Authorization', await as(Role.ORGANIZER));
+
+      expect(res.status).toBe(204);
+      expect(prisma.organizationAuditLog.create).toHaveBeenCalled();
+    });
+
+    it('refuses a volunteer for cancelling, removing and reading the audit log', async () => {
+      const auth = await as(Role.VOLUNTEER);
+
+      for (const [method, path] of [
+        ['delete', `/api/organizations/${ORG}/invitations/${MEMBER}`],
+        ['delete', `/api/organizations/${ORG}/members/${MEMBER}`],
+        ['get', `/api/organizations/${ORG}/audit`],
+      ] as const) {
+        const res = await api()[method](path).set('Authorization', auth);
+        expect(res.status, path).toBe(403);
+      }
+    });
+
+    it('lets a volunteer leave, answering with the removed shifts', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValue({
+        id: MEMBER,
+        userId: USER,
+        role: OrganizationRole.VOLUNTEER,
+        status: MembershipStatus.ACCEPTED,
+      });
+      prisma.shiftAssignment.deleteMany.mockResolvedValue({ count: 2 });
+
+      const res = await api()
+        .post(`/api/organizations/${ORG}/leave`)
+        .set('Authorization', await as(Role.VOLUNTEER));
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ removedShifts: 2 });
+    });
+
+    it('refuses the last manager leaving with 409', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValue({
+        id: MEMBER,
+        userId: USER,
+        role: OrganizationRole.MANAGER,
+        status: MembershipStatus.ACCEPTED,
+      });
+      prisma.organizationMember.count.mockResolvedValue(0);
+
+      const res = await api()
+        .post(`/api/organizations/${ORG}/leave`)
+        .set('Authorization', await as(Role.ORGANIZER));
+
+      expect(res.status).toBe(409);
+    });
+
+    it('gives managers the audit log', async () => {
+      asManager();
+      prisma.organizationAuditLog.findMany.mockResolvedValue([
+        { id: 'a1', actor: { id: 'x', name: 'X' }, targetUser: null },
+      ]);
+
+      const res = await api()
+        .get(`/api/organizations/${ORG}/audit`)
+        .set('Authorization', await as(Role.ORGANIZER));
+
+      expect(res.status).toBe(200);
+      expect(res.body[0].target).toBeNull();
     });
   });
 });

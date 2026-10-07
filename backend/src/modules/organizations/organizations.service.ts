@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import {
   MembershipStatus,
+  OrganizationAction,
   OrganizationRole,
   Role,
 } from '@/generated/prisma/enums.js';
@@ -19,8 +20,20 @@ import { omitLogo, toPublic } from './public-organization.js';
 /** What a volunteer can do on an event, from the organizations that run it. */
 export type VolunteerStatus = 'ASSIGNED' | 'AVAILABLE';
 
+const SHOWN_TO_MANAGERS: MembershipStatus[] = [
+  MembershipStatus.ACCEPTED,
+  MembershipStatus.PENDING,
+  MembershipStatus.DECLINED,
+];
+
 const isUniqueViolation = (error: unknown) =>
   (error as { code?: string }).code === 'P2002';
+
+/** A pending invitation is valid for 7 days, then it is expired (computed on read, no scheduled job). */
+export const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const isExpired = (invitedAt: Date) =>
+  Date.now() - invitedAt.getTime() > INVITATION_TTL_MS;
+const validSince = () => new Date(Date.now() - INVITATION_TTL_MS);
 
 @Injectable()
 export class OrganizationsService {
@@ -65,14 +78,18 @@ export class OrganizationsService {
 
   async listInvitations(userId: string) {
     const invitations = await this.prisma.organizationMember.findMany({
-      where: { userId, status: MembershipStatus.PENDING },
+      where: {
+        userId,
+        status: MembershipStatus.PENDING,
+        invitedAt: { gt: validSince() },
+      },
       include: { organization: { omit: omitLogo } },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { invitedAt: 'asc' },
     });
-    return invitations.map(({ id, role, createdAt, organization }) => ({
+    return invitations.map(({ id, role, invitedAt, organization }) => ({
       id,
       role,
-      createdAt,
+      createdAt: invitedAt,
       organization: toPublic(organization),
     }));
   }
@@ -107,15 +124,19 @@ export class OrganizationsService {
     return {
       ...toPublic(organization),
       role: me.role,
-      // Pending and declined invitations, and members' e-mails, are for managers only
+      // Pending and declined invitations, and members' e-mails, are for managers only.
+      // Cancelled invitations and people who left or were removed live in the audit log.
       members: members
-        .filter(
-          (member) => manager || member.status === MembershipStatus.ACCEPTED,
+        .filter(({ status }) =>
+          manager
+            ? SHOWN_TO_MANAGERS.includes(status)
+            : status === MembershipStatus.ACCEPTED,
         )
-        .map(({ id: memberId, role, status, user }) => ({
+        .map(({ id: memberId, role, status, invitedAt, user }) => ({
           id: memberId,
           role,
           status,
+          expired: status === MembershipStatus.PENDING && isExpired(invitedAt),
           user: {
             id: user.id,
             name: user.name,
@@ -161,14 +182,16 @@ export class OrganizationsService {
       organizationId_userId: { organizationId, userId: user.id },
     };
     const existing = await this.prisma.organizationMember.findUnique({ where });
-    if (existing && existing.status !== MembershipStatus.DECLINED) {
+    const accepted = existing?.status === MembershipStatus.ACCEPTED;
+    const waiting =
+      existing?.status === MembershipStatus.PENDING &&
+      !isExpired(existing.invitedAt);
+    if (accepted || waiting) {
       throw new ConflictException(
-        existing.status === MembershipStatus.ACCEPTED
-          ? 'Already a member'
-          : 'Already invited',
+        accepted ? 'Already a member' : 'Already invited',
       );
     }
-    // A declined invitation is sent again on the same row
+    // Declined, cancelled, expired, left or removed: the invitation goes again on the same row
     return this.prisma.organizationMember.upsert({
       where,
       create: { organizationId, userId: user.id, role, invitedById: inviterId },
@@ -176,9 +199,99 @@ export class OrganizationsService {
         status: MembershipStatus.PENDING,
         role,
         invitedById: inviterId,
+        invitedAt: new Date(),
       },
       select: { id: true, role: true, status: true },
     });
+  }
+
+  async cancelInvitation(
+    organizationId: string,
+    memberId: string,
+    actorId: string,
+  ) {
+    await this.assertManager(organizationId, actorId);
+    const member = await this.prisma.organizationMember.findFirst({
+      where: { id: memberId, organizationId },
+    });
+    if (!member) throw new NotFoundException('Invitation not found');
+    if (member.status !== MembershipStatus.PENDING) {
+      throw new ConflictException('Not a pending invitation');
+    }
+    await this.prisma.$transaction([
+      this.prisma.organizationMember.update({
+        where: { id: memberId },
+        data: { status: MembershipStatus.CANCELLED },
+      }),
+      this.prisma.organizationAuditLog.create({
+        data: {
+          organizationId,
+          action: OrganizationAction.INVITATION_CANCELLED,
+          actorId,
+          targetUserId: member.userId,
+        },
+      }),
+    ]);
+  }
+
+  /** A manager removes a member. */
+  async removeMember(
+    organizationId: string,
+    memberId: string,
+    actorId: string,
+  ) {
+    await this.assertManager(organizationId, actorId);
+    const member = await this.prisma.organizationMember.findFirst({
+      where: { id: memberId, organizationId },
+    });
+    if (!member || member.status !== MembershipStatus.ACCEPTED) {
+      throw new NotFoundException('Member not found');
+    }
+    if (member.userId === actorId) {
+      throw new BadRequestException('Use leave to quit an organization');
+    }
+    return this.endMembership(
+      organizationId,
+      member,
+      MembershipStatus.REMOVED,
+      actorId,
+      OrganizationAction.MEMBER_REMOVED,
+    );
+  }
+
+  /** A member quits the organization. */
+  async leave(organizationId: string, userId: string) {
+    const member = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId } },
+    });
+    if (!member || member.status !== MembershipStatus.ACCEPTED) {
+      throw new NotFoundException('Not a member of this organization');
+    }
+    return this.endMembership(
+      organizationId,
+      member,
+      MembershipStatus.LEFT,
+      userId,
+      OrganizationAction.MEMBER_LEFT,
+    );
+  }
+
+  /** The 100 latest removals and cancelled invitations, for the managers. */
+  async listAudit(organizationId: string, userId: string) {
+    await this.assertManager(organizationId, userId);
+    const entries = await this.prisma.organizationAuditLog.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: {
+        actor: { select: { id: true, name: true } },
+        targetUser: { select: { id: true, name: true } },
+      },
+    });
+    return entries.map(({ targetUser, ...entry }) => ({
+      ...entry,
+      target: targetUser,
+    }));
   }
 
   async setLogo(
@@ -293,7 +406,7 @@ export class OrganizationsService {
 
   /**
    * A manager removes a volunteer from every shift of an event. Allowed only for a volunteer of an
-   * organization that the manager manages and that runs the event.
+   * organization that the manager manages and that runs the event. Logged in that organization.
    */
   async removeVolunteerParticipation(
     managerId: string,
@@ -302,11 +415,11 @@ export class OrganizationsService {
   ) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { id: true },
+      select: { id: true, title: true },
     });
     if (!event) throw new NotFoundException('Event not found');
 
-    const shared = await this.prisma.eventOrganization.count({
+    const shared = await this.prisma.eventOrganization.findFirst({
       where: {
         eventId,
         organization: {
@@ -316,20 +429,96 @@ export class OrganizationsService {
           ],
         },
       },
+      select: { organizationId: true },
     });
-    if (shared === 0) {
+    if (!shared) {
       throw new ForbiddenException(
         'Not a volunteer of one of your organizations',
       );
     }
 
-    const { count } = await this.prisma.shiftAssignment.deleteMany({
-      where: { volunteerId, shift: { eventId } },
+    return this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.shiftAssignment.deleteMany({
+        where: { volunteerId, shift: { eventId } },
+      });
+      if (count === 0) {
+        throw new NotFoundException('Not registered on this event');
+      }
+      await tx.organizationAuditLog.create({
+        data: {
+          organizationId: shared.organizationId,
+          action: OrganizationAction.PARTICIPATION_REMOVED,
+          actorId: managerId,
+          targetUserId: volunteerId,
+          eventId,
+          details: { eventTitle: event.title, removedShifts: count },
+        },
+      });
+      return { removed: count };
     });
-    if (count === 0) {
-      throw new NotFoundException('Not registered on this event');
+  }
+
+  /**
+   * Ends a membership and takes the member off the upcoming shifts they can no longer do: those of
+   * events that no other organization of theirs runs. Past shifts stay (hours, attestation).
+   */
+  private async endMembership(
+    organizationId: string,
+    member: { id: string; userId: string; role: OrganizationRole },
+    status: MembershipStatus,
+    actorId: string,
+    action: OrganizationAction,
+  ) {
+    if (member.role === OrganizationRole.MANAGER) {
+      const otherManagers = await this.prisma.organizationMember.count({
+        where: {
+          organizationId,
+          role: OrganizationRole.MANAGER,
+          status: MembershipStatus.ACCEPTED,
+          id: { not: member.id },
+        },
+      });
+      if (otherManagers === 0) {
+        throw new ConflictException('Last manager of the organization');
+      }
     }
-    return { removed: count };
+    return this.prisma.$transaction(async (tx) => {
+      // First, so that this organization no longer counts as one the member belongs to
+      await tx.organizationMember.update({
+        where: { id: member.id },
+        data: { status },
+      });
+      const { count } = await tx.shiftAssignment.deleteMany({
+        where: {
+          volunteerId: member.userId,
+          shift: {
+            startsAt: { gt: new Date() },
+            event: {
+              organizations: { some: { organizationId } },
+              NOT: {
+                organizations: {
+                  some: {
+                    organization: {
+                      members: { some: volunteerOf(member.userId) },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+      await tx.organizationAuditLog.create({
+        data: {
+          organizationId,
+          action,
+          actorId,
+          targetUserId: member.userId,
+          details: { removedShifts: count },
+        },
+      });
+      return { removedShifts: count };
+    });
   }
 
   private async answer(
@@ -346,6 +535,9 @@ export class OrganizationsService {
     }
     if (invitation.status !== MembershipStatus.PENDING) {
       throw new ConflictException('Invitation already answered');
+    }
+    if (isExpired(invitation.invitedAt)) {
+      throw new ConflictException('Invitation expired');
     }
     return this.prisma.organizationMember.update({
       where: { id: invitationId },

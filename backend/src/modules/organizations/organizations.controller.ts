@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   HttpCode,
@@ -23,6 +24,7 @@ import {
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
+  ApiOkResponse,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -130,6 +132,63 @@ export class OrganizationsController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.organizations.invite(id, dto.email, user.id);
+  }
+
+  @Delete(':id/invitations/:memberId')
+  @HttpCode(204)
+  @Roles(Role.ORGANIZER)
+  @ApiForbiddenResponse({
+    description: "Réservé aux gestionnaires de l'organisation",
+  })
+  @ApiNotFoundResponse({ description: 'Invitation introuvable' })
+  @ApiConflictResponse({
+    description: "Ce n'est pas une invitation en attente",
+  })
+  async cancelInvitation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    await this.organizations.cancelInvitation(id, memberId, user.id);
+  }
+
+  @Delete(':id/members/:memberId')
+  @Roles(Role.ORGANIZER)
+  @ApiOkResponse({
+    description: 'Membre retiré ; nombre de créneaux à venir retirés avec lui',
+  })
+  @ApiForbiddenResponse({
+    description: "Réservé aux gestionnaires de l'organisation",
+  })
+  @ApiConflictResponse({
+    description: "Dernier gestionnaire de l'organisation",
+  })
+  removeMember(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.organizations.removeMember(id, memberId, user.id);
+  }
+
+  @Post(':id/leave')
+  @HttpCode(200)
+  @ApiOkResponse({ description: "Vous avez quitté l'organisation" })
+  @ApiConflictResponse({
+    description: "Dernier gestionnaire de l'organisation",
+  })
+  leave(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.organizations.leave(id, user.id);
+  }
+
+  @Get(':id/audit')
+  @Roles(Role.ORGANIZER)
+  @ApiOkResponse({ description: 'Journal : retraits et invitations annulées' })
+  @ApiForbiddenResponse({
+    description: "Réservé aux gestionnaires de l'organisation",
+  })
+  audit(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.organizations.listAudit(id, user.id);
   }
 
   @Put(':id/logo')
