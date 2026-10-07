@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDate, IsEnum, IsOptional } from 'class-validator';
+import { IsDate, IsEnum, IsOptional, IsUUID } from 'class-validator';
 import { EventCategory } from '@/generated/prisma/enums.js';
 
 export class ListEventsQueryDto {
@@ -20,4 +20,11 @@ export class ListEventsQueryDto {
   @IsOptional()
   @IsEnum(EventCategory)
   category?: EventCategory;
+
+  @ApiPropertyOptional({
+    description: 'Seulement les événements de cette organisation',
+  })
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
 }

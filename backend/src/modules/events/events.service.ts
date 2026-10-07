@@ -21,10 +21,28 @@ const include = {
     select: { organization: { omit: omitLogo } },
     orderBy: { createdAt: 'asc' as const },
   },
+  shifts: {
+    select: {
+      requiredVolunteers: true,
+      _count: { select: { assignments: true } },
+    },
+  },
   _count: {
     select: { tickets: { where: { status: TicketStatus.RESERVED } } },
   },
 };
+
+/** How many volunteers the shifts of an event still need. */
+function volunteerCoverage(
+  shifts: { requiredVolunteers: number; _count: { assignments: number } }[],
+) {
+  const required = shifts.reduce((sum, s) => sum + s.requiredVolunteers, 0);
+  const missing = shifts.reduce(
+    (sum, s) => sum + Math.max(0, s.requiredVolunteers - s._count.assignments),
+    0,
+  );
+  return { required, registered: required - missing, missing };
+}
 
 function present<
   T extends {
@@ -32,9 +50,10 @@ function present<
     capacity: number;
     _count: { tickets: number };
     organizations: { organization: { logoContentType: string | null } }[];
+    shifts: { requiredVolunteers: number; _count: { assignments: number } }[];
   },
 >(
-  { _count, organizations, ...event }: T,
+  { _count, organizations, shifts, ...event }: T,
   statuses: Map<string, VolunteerStatus>,
 ) {
   return {
@@ -43,6 +62,7 @@ function present<
     organizations: organizations.map(({ organization }) =>
       toPublic(organization),
     ),
+    volunteers: volunteerCoverage(shifts),
     // Only for a logged in volunteer of one of the organizations, or already on a shift
     volunteerStatus: statuses.get(event.id) ?? null,
   };
@@ -85,9 +105,16 @@ export class EventsService {
     };
   }
 
-  async findAll({ from, to, category }: ListEventsQueryDto, user?: AuthUser) {
+  async findAll(
+    { from, to, category, organizationId }: ListEventsQueryDto,
+    user?: AuthUser,
+  ) {
     const events = await this.prisma.event.findMany({
-      where: { category, startsAt: { gte: from, lte: to } },
+      where: {
+        category,
+        startsAt: { gte: from, lte: to },
+        ...(organizationId && { organizations: { some: { organizationId } } }),
+      },
       orderBy: { startsAt: 'asc' },
       include,
     });

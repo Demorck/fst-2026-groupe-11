@@ -91,11 +91,15 @@ describe('EventsService', () => {
   });
 
   it('lists filtered events by date with remaining seats', async () => {
-    const findMany = vi
-      .fn()
-      .mockResolvedValue([
-        { id: 'e1', capacity: 50, _count: { tickets: 12 }, organizations: [] },
-      ]);
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: 'e1',
+        capacity: 50,
+        _count: { tickets: 12 },
+        organizations: [],
+        shifts: [],
+      },
+    ]);
     const from = new Date('2026-12-01');
 
     const events = await (
@@ -108,6 +112,7 @@ describe('EventsService', () => {
         capacity: 50,
         remainingSeats: 38,
         organizations: [],
+        volunteers: { required: 0, registered: 0, missing: 0 },
         volunteerStatus: null,
       },
     ]);
@@ -128,6 +133,7 @@ describe('EventsService', () => {
       capacity: 50,
       organizer: { id: 'org-1', name: 'Asso' },
       organizations: [],
+      shifts: [],
       _count: { tickets: 50 },
     });
 
@@ -136,6 +142,7 @@ describe('EventsService', () => {
       capacity: 50,
       organizer: { id: 'org-1', name: 'Asso' },
       organizations: [],
+      volunteers: { required: 0, registered: 0, missing: 0 },
       remainingSeats: 0,
       volunteerStatus: null,
     });
@@ -147,6 +154,7 @@ describe('EventsService', () => {
         id: 'e1',
         capacity: 10,
         _count: { tickets: 0 },
+        shifts: [],
         organizations: [
           {
             organization: {
@@ -158,7 +166,13 @@ describe('EventsService', () => {
           { organization: { id: 'o2', name: 'Sport', logoContentType: null } },
         ],
       },
-      { id: 'e2', capacity: 10, _count: { tickets: 0 }, organizations: [] },
+      {
+        id: 'e2',
+        capacity: 10,
+        _count: { tickets: 0 },
+        shifts: [],
+        organizations: [],
+      },
     ];
 
     it('lists the organizations of each event, with hasLogo and no logo bytes', async () => {
@@ -232,5 +246,53 @@ describe('EventsService', () => {
     await expect(
       (await build({ findUnique })).findOne('missing'),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  describe('volunteer coverage and organization filter', () => {
+    const shift = (requiredVolunteers: number, assignments: number) => ({
+      requiredVolunteers,
+      _count: { assignments },
+    });
+
+    it('sums what the shifts of an event still miss, without counting an overbooked shift negatively', async () => {
+      const findMany = vi.fn().mockResolvedValue([
+        {
+          id: 'e1',
+          capacity: 10,
+          _count: { tickets: 0 },
+          organizations: [],
+          shifts: [shift(3, 1), shift(2, 2), shift(2, 0)],
+        },
+      ]);
+
+      const [event] = await (await build({ findMany })).findAll({});
+
+      expect(event.volunteers).toEqual({
+        required: 7,
+        registered: 3,
+        missing: 4,
+      });
+      expect(event).not.toHaveProperty('shifts');
+    });
+
+    it('filters on the organization when asked', async () => {
+      const findMany = vi.fn().mockResolvedValue([]);
+
+      await (await build({ findMany })).findAll({ organizationId: 'o1' });
+
+      expect(findMany.mock.calls[0][0].where.organizations).toEqual({
+        some: { organizationId: 'o1' },
+      });
+    });
+
+    it('does not filter on organizations by default', async () => {
+      const findMany = vi.fn().mockResolvedValue([]);
+
+      await (await build({ findMany })).findAll({});
+
+      expect(findMany.mock.calls[0][0].where).not.toHaveProperty(
+        'organizations',
+      );
+    });
   });
 });
