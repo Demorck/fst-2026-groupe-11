@@ -20,6 +20,7 @@ Les pages (`EventsPage`, `CheckinPage`, `DashboardPage`, etc.) et leurs routes e
 4. Nouvelle route seulement si elle n'existe pas : l'ajouter dans `router.tsx` comme enfant de `RootLayout`. Ajouter un `NavLink` dans `layouts/RootLayout.tsx` si la page doit être accessible depuis le menu.
 5. Lancer `npm run lint && npm run build` (le build vérifie les types avec `tsc -b`).
 6. Contrôler dans le navigateur (`npm run dev`, http://localhost:5173) : état de chargement, erreur API, cas vide.
+7. Contrôler le responsive (DevTools, mode appareil) à 360 px, 768 px et 1280 px : pas de défilement horizontal, texte lisible, cibles tactiles utilisables.
 
 ## Gabarits (imports avec extension, `import type` pour les types)
 
@@ -52,3 +53,16 @@ export function useEvents() {
 ```
 
 Interface en français, classes Tailwind, éléments sémantiques (`<button>`, `<label>`). Règles complètes dans `.claude/rules/frontend-react.md`.
+
+## Responsive
+
+Mobile d'abord : les classes sans préfixe visent le mobile, les préfixes `sm:` (640 px), `md:` (768 px) et `lg:` (1024 px) ajoutent les variantes plus larges.
+
+- **Grilles et listes** : `grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3`. Une colonne sur mobile.
+- **Rangées** : `flex flex-col gap-2 sm:flex-row sm:items-center` pour empiler sur mobile.
+- **Conteneurs** : `w-full max-w-*` et `px-4 sm:px-6`, jamais de largeur fixe en `px`. Ajouter `min-w-0` aux enfants flex qui contiennent du texte long.
+- **Tableaux** (check-in, dashboard) : envelopper dans `overflow-x-auto`, ou afficher des cartes empilées sur mobile.
+- **Formulaires** : champs en `w-full`, boutons en `w-full sm:w-auto`.
+- **Cibles tactiles** : boutons et liens d'au moins 44 px de haut (`min-h-11`).
+- **Navigation** (`RootLayout.tsx`) : menu qui passe à la ligne ou se replie sur mobile, jamais coupé.
+- **Texte** : `text-base` minimum pour les champs de saisie (évite le zoom automatique sur iOS). Ne pas masquer d'information avec `hidden` sans alternative sur mobile.
