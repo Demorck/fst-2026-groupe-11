@@ -8,7 +8,7 @@
   --color-ink: #16181d;
   --color-muted: #555a66;
   --color-canvas: #f5f6fa;
-  --color-line: #e3e5ec;
+  --color-line: #dadde6;
   --color-line-soft: #ecedf1;
   --color-field: #c9ccd6;
 
@@ -32,6 +32,14 @@
   h1,
   h2,
   h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  h1,
+  h2,
+  h3 {
     @apply font-display;
   }
   a {
@@ -50,7 +58,29 @@
   }
 }
 
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
 @layer components {
+  @media (prefers-reduced-motion: no-preference) {
+    .modal-panel,
+    .toast {
+      animation: modal-in 160ms ease-out;
+    }
+    .modal-backdrop {
+      animation: fade-in 160ms ease-out;
+    }
+  }
+
   .page-title {
     @apply font-display text-3xl leading-tight font-bold sm:text-4xl;
   }
@@ -59,11 +89,18 @@
   }
 
   .card {
-    @apply rounded-xl border border-line bg-white p-5;
+    @apply rounded-xl border border-line bg-white p-5 shadow-[0_1px_2px_rgb(22_24_29/0.06)];
   }
 
   .btn {
     @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-[10px] text-center px-4 font-semibold no-underline disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  /* Optical centering: the text is trimmed to its cap height so that it sits in the middle of the box,
+     not slightly above it as the font metrics would put it. Browsers without text-box ignore this. */
+  .btn,
+  .chip,
+  .badge {
+    text-box: trim-both cap alphabetic;
   }
   .btn-primary {
     @apply bg-brand text-white hover:bg-brand-deep hover:text-white;
@@ -79,7 +116,7 @@
   }
 
   .field {
-    @apply block min-h-11 w-full rounded-lg border border-field bg-white px-3 py-2 text-base text-ink placeholder:text-muted aria-invalid:border-2 aria-invalid:border-danger;
+    @apply block min-h-11 w-full rounded-lg border border-field bg-white px-3 py-2 text-base text-ink placeholder:text-muted hover:border-muted/60 aria-invalid:border-2 aria-invalid:border-danger motion-safe:transition-colors;
   }
   select.field {
     @apply appearance-none bg-[length:1rem] bg-[position:right_0.75rem_center] bg-no-repeat pr-10;
@@ -101,7 +138,7 @@
 
   /* Pill that holds a radio or a checkbox: the whole pill is the click target */
   .chip {
-    @apply inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-full border border-field bg-white px-4 text-sm font-medium has-[:checked]:border-brand has-[:checked]:bg-brand-tint has-[:checked]:text-brand-deep has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand;
+    @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-full border border-field bg-white px-4 text-center text-sm font-medium has-[:checked]:border-brand has-[:checked]:bg-brand-tint has-[:checked]:text-brand-deep has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand;
   }
 
   .skeleton {
@@ -109,7 +146,7 @@
   }
 
   .badge {
-    @apply inline-flex items-center rounded-full bg-line-soft px-2.5 py-0.5 text-xs font-semibold text-ink;
+    @apply inline-flex min-h-[1.375rem] items-center justify-center rounded-full bg-line-soft px-2.5 text-center text-xs font-semibold text-ink;
   }
   .badge-brand {
     @apply bg-brand-tint text-brand-deep;
@@ -119,6 +156,9 @@
   }
   .badge-warn {
     @apply bg-warn-bg text-warn-ink;
+  }
+  .badge-danger {
+    @apply bg-danger-bg text-danger;
   }
 
   .alert-error {
@@ -136,5 +176,14 @@
   }
   .progress-bar {
     @apply h-full rounded-full bg-brand;
+  }
+}
+
+@media print {
+  @page {
+    margin: 18mm;
+  }
+  body {
+    background: #fff;
   }
 }

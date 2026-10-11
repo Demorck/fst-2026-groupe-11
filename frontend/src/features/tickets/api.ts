@@ -2,7 +2,9 @@ import { apiFetch } from '../../api/client.ts';
 import type { CheckinTicket, MyTicket, Ticket } from './types.ts';
 
 export const reserveTicket = (eventId: string) =>
-  apiFetch<Ticket>(`/events/${eventId}/tickets`, { method: 'POST' });
+  apiFetch<Ticket>(`/events/${encodeURIComponent(eventId)}/tickets`, {
+    method: 'POST',
+  });
 
 export const getMyTickets = () => apiFetch<MyTicket[]>('/me/tickets');
 
@@ -15,4 +17,9 @@ export const getEventTickets = (eventId: string, search: string) =>
 export const checkIn = (ticketId: string) =>
   apiFetch<CheckinTicket>(`/tickets/${encodeURIComponent(ticketId)}/checkin`, {
     method: 'POST',
+  });
+
+export const cancelTicket = (eventId: string) =>
+  apiFetch<Ticket>(`/events/${encodeURIComponent(eventId)}/tickets`, {
+    method: 'DELETE',
   });

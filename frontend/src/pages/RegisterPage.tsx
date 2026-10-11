@@ -1,14 +1,19 @@
+import { useDocumentTitle } from '../hooks/useDocumentTitle.ts';
 import { Navigate } from 'react-router';
+import AuthShell from '../features/auth/components/AuthShell.tsx';
 import RegisterForm from '../features/auth/components/RegisterForm.tsx';
 import { useSession } from '../features/auth/session.ts';
 
 export default function RegisterPage() {
+  useDocumentTitle('Inscription');
   if (useSession()) return <Navigate to="/" replace />;
 
   return (
-    <div className="mx-auto max-w-md space-y-6">
-      <h1 className="page-title">Inscription</h1>
+    <AuthShell
+      title="Inscription"
+      subtitle="Créez votre compte pour réserver, bénévoler ou organiser."
+    >
       <RegisterForm />
-    </div>
+    </AuthShell>
   );
 }

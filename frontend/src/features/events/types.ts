@@ -71,6 +71,11 @@ export interface EventWithSeats extends EventDetail {
   volunteerStatus: VolunteerStatus | null;
 }
 
+/** GET /events/:id also says whether the viewer manages the event (organizer of one of its organizations). */
+export interface EventWithAccess extends EventWithSeats {
+  canManage: boolean;
+}
+
 export const formatEventDate = (iso: string) =>
   new Date(iso).toLocaleString('fr-FR', {
     dateStyle: 'full',
@@ -79,3 +84,12 @@ export const formatEventDate = (iso: string) =>
 
 export const formatShortDay = (iso: string) =>
   new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+
+/** "Aujourd'hui", "Demain", "Dans 5 jours"; null for a past day or one further than `maxDays` (two weeks by default). */
+export function proximity(iso: string, now: number, maxDays = 14) {
+  const day = (time: number) => new Date(time).setHours(0, 0, 0, 0);
+  const days = Math.round((day(Date.parse(iso)) - day(now)) / 86_400_000);
+  if (days < 0 || days > maxDays) return null;
+  if (days === 0) return "Aujourd'hui";
+  return days === 1 ? 'Demain' : `Dans ${days} jours`;
+}

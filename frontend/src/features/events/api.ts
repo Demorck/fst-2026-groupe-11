@@ -1,5 +1,10 @@
 import { apiFetch } from '../../api/client.ts';
-import type { CreateEventInput, EventDetail, EventWithSeats } from './types.ts';
+import type {
+  CreateEventInput,
+  EventDetail,
+  EventWithAccess,
+  EventWithSeats,
+} from './types.ts';
 
 export const createEvent = (input: CreateEventInput) =>
   apiFetch<EventDetail>('/events', {
@@ -18,4 +23,4 @@ export const listUpcomingEvents = (organizationId?: string) =>
   );
 
 export const getEvent = (id: string) =>
-  apiFetch<EventWithSeats>(`/events/${encodeURIComponent(id)}`);
+  apiFetch<EventWithAccess>(`/events/${encodeURIComponent(id)}`);

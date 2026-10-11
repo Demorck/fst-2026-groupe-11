@@ -1,6 +1,8 @@
+import { useDocumentTitle } from '../hooks/useDocumentTitle.ts';
 import DashboardView from '../features/dashboard/components/DashboardView.tsx';
 
 export default function DashboardPage() {
+  useDocumentTitle('Dashboard');
   return (
     <div className="space-y-7">
       <div>

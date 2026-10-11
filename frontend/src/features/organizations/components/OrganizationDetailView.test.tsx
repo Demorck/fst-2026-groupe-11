@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
+import DialogHost from '../../../components/DialogHost.tsx';
 import OrganizationDetailView from './OrganizationDetailView.tsx';
 
 const SELF = { id: 'u1', email: 'o@x.fr', name: 'Océane', role: 'ORGANIZER' };
@@ -86,7 +87,12 @@ function renderView() {
     [
       {
         path: '/organizations/:organizationId/manage',
-        element: <OrganizationDetailView organizationId="o1" />,
+        element: (
+          <>
+            <OrganizationDetailView organizationId="o1" />
+            <DialogHost />
+          </>
+        ),
       },
       { path: '/organizations', element: <p>Mes organisations</p> },
     ],
@@ -244,7 +250,7 @@ describe('OrganizationDetailView', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
       'dernier gestionnaire',
     );
     expect(
@@ -261,9 +267,9 @@ describe('OrganizationDetailView', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Inviter' }));
 
     // Same text whoever the email belongs to: the API does not tell
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      'Si cette adresse correspond à un compte',
-    );
+    expect(
+      await screen.findByText(/Si cette adresse correspond à un compte/),
+    ).toBeInTheDocument();
     const [, init] = writes(fetch).find(([url]) =>
       url.endsWith('/invitations'),
     ) as [string, RequestInit];
@@ -347,7 +353,7 @@ describe('OrganizationDetailView', () => {
 
     await userEvent.upload(await screen.findByLabelText(/Logo/), big);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('512 Ko');
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('512 Ko');
     expect(writes(fetch)).toHaveLength(0);
   });
 

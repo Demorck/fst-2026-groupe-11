@@ -2,12 +2,16 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
+import DialogHost from '../components/DialogHost.tsx';
 import VolunteerShiftsPage from './VolunteerShiftsPage.tsx';
+
+// Relative dates: a shift that has ended cannot be joined
+const inThirtyDays = Date.now() + 30 * 86_400_000;
 
 const shift = {
   title: 'Bar',
-  startsAt: '2026-12-01T19:00:00.000Z',
-  endsAt: '2026-12-01T21:00:00.000Z',
+  startsAt: new Date(inThirtyDays).toISOString(),
+  endsAt: new Date(inThirtyDays + 2 * 3_600_000).toISOString(),
   eventId: 'e1',
 };
 
@@ -30,7 +34,17 @@ function logInAs(role: string) {
 
 function renderPage() {
   const router = createMemoryRouter(
-    [{ path: '/events/:eventId/shifts', element: <VolunteerShiftsPage /> }],
+    [
+      {
+        path: '/events/:eventId/shifts',
+        element: (
+          <>
+            <VolunteerShiftsPage />
+            <DialogHost />
+          </>
+        ),
+      },
+    ],
     { initialEntries: ['/events/e1/shifts'] },
   );
   render(<RouterProvider router={router} />);
@@ -39,11 +53,37 @@ function renderPage() {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status });
 
+/** Routes the event read of the subtitle apart, so that `api` only sees the shift calls. */
+function stubApi(api: ReturnType<typeof vi.fn>, canManage = true) {
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+    url === '/api/events/e1'
+      ? Promise.resolve(
+          json({
+            id: 'e1',
+            title: 'Gala',
+            startsAt: '2026-12-01T19:00:00.000Z',
+            location: 'Nancy',
+            canManage,
+          }),
+        )
+      : (api as unknown as typeof fetch)(url, init),
+  );
+}
+
 describe('VolunteerShiftsPage', () => {
+  it('names the event under the title', async () => {
+    logInAs('VOLUNTEER');
+    stubApi(vi.fn().mockResolvedValue(json(shifts)));
+
+    renderPage();
+
+    expect(await screen.findByText(/Gala · .* · Nancy/)).toBeInTheDocument();
+  });
+
   it('lists the shifts with the coverage and highlights mine', async () => {
     logInAs('VOLUNTEER');
     const fetch = vi.fn().mockResolvedValue(json(shifts));
-    vi.stubGlobal('fetch', fetch);
+    stubApi(fetch);
 
     renderPage();
 
@@ -57,7 +97,7 @@ describe('VolunteerShiftsPage', () => {
 
   it('hides the organizer actions from a volunteer', async () => {
     logInAs('VOLUNTEER');
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(shifts)));
+    stubApi(vi.fn().mockResolvedValue(json(shifts)));
 
     renderPage();
 
@@ -68,7 +108,7 @@ describe('VolunteerShiftsPage', () => {
   });
 
   it('says so when the event has no shift', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json([])));
+    stubApi(vi.fn().mockResolvedValue(json([])));
 
     renderPage();
 
@@ -78,8 +118,7 @@ describe('VolunteerShiftsPage', () => {
   });
 
   it('shows the API error', async () => {
-    vi.stubGlobal(
-      'fetch',
+    stubApi(
       vi.fn().mockResolvedValue(json({ message: 'Event not found' }, 404)),
     );
 
@@ -95,6 +134,22 @@ describe('VolunteerShiftsPage sign-up', () => {
   const join = () => screen.findByRole('button', { name: "S'inscrire" });
   const leave = () => screen.findByRole('button', { name: 'Se désinscrire' });
 
+  it('shows "Terminé" instead of a sign-up on a shift that has ended', async () => {
+    logInAs('VOLUNTEER');
+    const ended = {
+      ...shifts[1],
+      startsAt: new Date(Date.now() - 4 * 3_600_000).toISOString(),
+      endsAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+      registered: 0,
+    };
+    stubApi(vi.fn().mockResolvedValue(json([ended])));
+
+    renderPage();
+
+    expect(await screen.findByText('Terminé')).toBeVisible();
+    expect(screen.queryByRole('button', { name: "S'inscrire" })).toBeNull();
+  });
+
   it('shows the right button on each shift', async () => {
     logInAs('VOLUNTEER');
     const open = {
@@ -103,7 +158,7 @@ describe('VolunteerShiftsPage sign-up', () => {
       title: 'Vestiaire',
       assigned: false,
     };
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json([...shifts, open])));
+    stubApi(vi.fn().mockResolvedValue(json([...shifts, open])));
 
     renderPage();
 
@@ -123,7 +178,7 @@ describe('VolunteerShiftsPage sign-up', () => {
       .mockResolvedValueOnce(
         json([{ ...open, assigned: true, registered: 2 }]),
       );
-    vi.stubGlobal('fetch', fetch);
+    stubApi(fetch);
     renderPage();
 
     await userEvent.click(await join());
@@ -138,8 +193,7 @@ describe('VolunteerShiftsPage sign-up', () => {
   it('explains the refusal when the volunteer belongs to no organization of the event', async () => {
     logInAs('VOLUNTEER');
     const open = { ...shifts[0], assigned: false, registered: 1 };
-    vi.stubGlobal(
-      'fetch',
+    stubApi(
       vi
         .fn()
         .mockResolvedValueOnce(json([open]))
@@ -155,7 +209,7 @@ describe('VolunteerShiftsPage sign-up', () => {
 
     await userEvent.click(await join());
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
       "Vous n'êtes bénévole d'aucune organisation de cet événement.",
     );
   });
@@ -169,7 +223,7 @@ describe('VolunteerShiftsPage sign-up', () => {
       .mockResolvedValueOnce(
         json([{ ...shifts[0], assigned: false, registered: 1 }]),
       );
-    vi.stubGlobal('fetch', fetch);
+    stubApi(fetch);
     renderPage();
 
     await userEvent.click(await leave());
@@ -189,8 +243,7 @@ describe('VolunteerShiftsPage sign-up', () => {
   ])('translates the "%s" refusal', async (message, text) => {
     logInAs('VOLUNTEER');
     const open = { ...shifts[0], assigned: false };
-    vi.stubGlobal(
-      'fetch',
+    stubApi(
       vi
         .fn()
         .mockResolvedValueOnce(json([open]))
@@ -201,22 +254,50 @@ describe('VolunteerShiftsPage sign-up', () => {
 
     await userEvent.click(await join());
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(text);
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(text);
   });
 
-  it('offers no sign-up to an organizer', async () => {
+  it('offers the sign-up to an organizer too (inherits the volunteer rights)', async () => {
     logInAs('ORGANIZER');
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(shifts)));
+    const open = { ...shifts[0], assigned: false };
+    stubApi(vi.fn().mockResolvedValue(json([open])));
+
+    renderPage();
+
+    expect(await join()).toBeVisible();
+  });
+});
+
+describe('VolunteerShiftsPage as an organizer who does not manage the event', () => {
+  it('shows the shifts without any way to change them', async () => {
+    logInAs('ORGANIZER');
+    stubApi(vi.fn().mockResolvedValue(json(shifts)), false);
 
     renderPage();
 
     await screen.findByText('Bar');
-    expect(screen.queryByRole('button', { name: "S'inscrire" })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Se désinscrire' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: '+ Ajouter un créneau' }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /Modifier|Supprimer/ }),
+    ).toBeNull();
   });
 });
 
 describe('VolunteerShiftsPage as organizer', () => {
+  it('shows an organizer who manages the event both the add button and their own count', async () => {
+    logInAs('ORGANIZER');
+    stubApi(vi.fn().mockResolvedValue(json(shifts)));
+
+    renderPage();
+
+    expect(
+      await screen.findByRole('button', { name: /Ajouter un créneau/ }),
+    ).toBeVisible();
+    expect(screen.getByText(/Vous êtes inscrit sur/)).toBeVisible();
+  });
+
   it('creates a shift and reloads the list', async () => {
     logInAs('ORGANIZER');
     const fetch = vi
@@ -224,7 +305,7 @@ describe('VolunteerShiftsPage as organizer', () => {
       .mockResolvedValueOnce(json([]))
       .mockResolvedValueOnce(json({ id: 's3' }))
       .mockResolvedValueOnce(json(shifts));
-    vi.stubGlobal('fetch', fetch);
+    stubApi(fetch);
     renderPage();
 
     await userEvent.click(
@@ -256,7 +337,7 @@ describe('VolunteerShiftsPage as organizer', () => {
   it('refuses an end before the start without calling the API', async () => {
     logInAs('ORGANIZER');
     const fetch = vi.fn().mockResolvedValue(json([]));
-    vi.stubGlobal('fetch', fetch);
+    stubApi(fetch);
     renderPage();
 
     await userEvent.click(
@@ -287,7 +368,7 @@ describe('VolunteerShiftsPage as organizer', () => {
       .mockResolvedValueOnce(json(shifts))
       .mockResolvedValueOnce(json({ id: 's1' }))
       .mockResolvedValueOnce(json(shifts));
-    vi.stubGlobal('fetch', fetch);
+    stubApi(fetch);
     renderPage();
 
     await userEvent.click(
@@ -316,12 +397,14 @@ describe('VolunteerShiftsPage as organizer', () => {
       .mockResolvedValueOnce(json(shifts))
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
       .mockResolvedValueOnce(json([shifts[1]]));
-    vi.stubGlobal('fetch', fetch);
-    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    stubApi(fetch);
     renderPage();
 
     await userEvent.click(
       await screen.findByRole('button', { name: 'Supprimer Bar' }),
+    );
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Confirmer' }),
     );
 
     await vi.waitFor(() => expect(screen.queryByText('Bar')).toBeNull());
@@ -333,12 +416,14 @@ describe('VolunteerShiftsPage as organizer', () => {
   it('keeps the shift when the deletion is not confirmed', async () => {
     logInAs('ORGANIZER');
     const fetch = vi.fn().mockResolvedValue(json(shifts));
-    vi.stubGlobal('fetch', fetch);
-    vi.stubGlobal('confirm', vi.fn().mockReturnValue(false));
+    stubApi(fetch);
     renderPage();
 
     await userEvent.click(
       await screen.findByRole('button', { name: 'Supprimer Bar' }),
+    );
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Annuler' }),
     );
 
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -347,21 +432,22 @@ describe('VolunteerShiftsPage as organizer', () => {
 
   it('shows the API refusal on a deletion', async () => {
     logInAs('ORGANIZER');
-    vi.stubGlobal(
-      'fetch',
+    stubApi(
       vi
         .fn()
         .mockResolvedValueOnce(json(shifts))
         .mockResolvedValueOnce(json({ message: 'Not the organizer' }, 403)),
     );
-    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
     renderPage();
 
     await userEvent.click(
       await screen.findByRole('button', { name: 'Supprimer Bar' }),
     );
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Confirmer' }),
+    );
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
       'Not the organizer',
     );
   });

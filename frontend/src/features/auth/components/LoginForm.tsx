@@ -20,7 +20,7 @@ export default function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="card space-y-5 p-6">
+    <form onSubmit={onSubmit} className="space-y-5">
       <TextField
         label="Email"
         type="email"

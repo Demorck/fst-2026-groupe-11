@@ -30,22 +30,24 @@ export default function RegisterForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="card space-y-5 p-6">
-      <TextField
-        label="Nom"
-        autoComplete="name"
-        required
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <TextField
-        label="Email"
-        type="email"
-        autoComplete="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
+    <form onSubmit={onSubmit} className="space-y-5">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <TextField
+          label="Nom"
+          autoComplete="name"
+          required
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <TextField
+          label="Email"
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+      </div>
       <TextField
         label="Mot de passe (8 caractères minimum)"
         type="password"

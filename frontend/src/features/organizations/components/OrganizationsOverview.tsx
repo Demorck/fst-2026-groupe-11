@@ -3,6 +3,7 @@ import type { SyntheticEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import TextField from '../../../components/TextField.tsx';
 import { useSubmit } from '../../auth/hooks/useSubmit.ts';
+import { alertDialog, toast } from '../../../components/dialogs.ts';
 import { useAuth } from '../../auth/useAuth.ts';
 import {
   answerInvitation,
@@ -10,23 +11,37 @@ import {
   getInvitations,
   getMyOrganizations,
   leaveOrganization,
+  uploadLogo,
 } from '../api.ts';
 import { translate } from '../messages.ts';
 import { refreshPendingInvitations } from '../pendingInvitations.ts';
 import { ROLE_LABELS } from '../types.ts';
 import type { Invitation, MyOrganization } from '../types.ts';
-import ConfirmButton from './ConfirmButton.tsx';
+import ConfirmButton from '../../../components/ConfirmButton.tsx';
+import LogoPicker from './LogoPicker.tsx';
 import OrganizationLogo from './OrganizationLogo.tsx';
 
 function CreateOrganizationForm() {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [logo, setLogo] = useState<File | null>(null);
   const { submit, pending, error } = useSubmit(async () => {
     const organization = await createOrganization({
       name: name.trim(),
       description: description.trim() || undefined,
     });
+    if (logo) {
+      try {
+        await uploadLogo(organization.id, logo);
+      } catch (err) {
+        // The organization exists: do not block, the logo can be sent again from its page
+        void alertDialog({
+          title: 'Logo refusé',
+          message: translate((err as Error).message),
+        });
+      }
+    }
     await navigate(`/organizations/${organization.id}/manage`);
   });
 
@@ -50,6 +65,22 @@ function CreateOrganizationForm() {
         maxLength={500}
         value={description}
         onChange={(e) => setDescription(e.target.value)}
+      />
+      <LogoPicker
+        current={
+          <OrganizationLogo
+            organization={{
+              id: '',
+              name: name.trim() || 'Organisation',
+              description: null,
+              hasLogo: false,
+              updatedAt: '',
+            }}
+            className="size-16 text-lg"
+          />
+        }
+        file={logo}
+        onPick={setLogo}
       />
       {error && (
         <p role="alert" className="alert-error">
@@ -92,29 +123,33 @@ export default function OrganizationsOverview() {
   }, [load]);
 
   async function answer(id: string, choice: 'accept' | 'decline') {
-    setError(null);
     try {
       await answerInvitation(id, choice);
       await Promise.all([load(), refreshPendingInvitations()]);
+      toast(
+        choice === 'accept' ? 'Invitation acceptée.' : 'Invitation refusée.',
+      );
     } catch (err) {
-      setError(translate((err as Error).message));
+      void alertDialog({ message: translate((err as Error).message) });
     }
   }
 
   async function leave(id: string) {
-    setError(null);
     try {
       await leaveOrganization(id);
       await load();
+      toast("Vous avez quitté l'organisation.");
     } catch (err) {
-      setError(translate((err as Error).message));
+      void alertDialog({ message: translate((err as Error).message) });
     }
   }
 
   const organizer = user?.role === 'ORGANIZER';
 
   return (
-    <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+    <div
+      className={`grid items-start gap-8 ${organizer ? 'lg:grid-cols-[minmax(0,1fr)_340px]' : ''}`}
+    >
       <div className="min-w-0 space-y-8">
         {error && (
           <p role="alert" className="alert-error">
@@ -192,7 +227,9 @@ export default function OrganizationsOverview() {
               )}
             </div>
           )}
-          <ul className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
+          <ul
+            className={`grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 ${organizer ? '' : 'xl:grid-cols-3'}`}
+          >
             {organizations?.map((organization) => (
               <li
                 key={organization.id}
@@ -206,7 +243,7 @@ export default function OrganizationsOverview() {
                   <div className="min-w-0 flex-1">
                     <Link
                       to={`/organizations/${organization.id}/manage`}
-                      className="block truncate font-semibold text-ink hover:text-brand hover:underline"
+                      className="block truncate font-semibold text-ink"
                     >
                       {organization.name}
                     </Link>
@@ -232,7 +269,8 @@ export default function OrganizationsOverview() {
                   <ConfirmButton
                     label="Quitter"
                     ariaLabel={`Quitter ${organization.name}`}
-                    question="Quitter ? Vos créneaux à venir seront retirés."
+                    question="Quitter cette organisation ?"
+                    details="Vos créneaux à venir sur ses événements seront retirés ; vos heures passées restent."
                     onConfirm={() => leave(organization.id)}
                   />
                 </div>
@@ -243,7 +281,7 @@ export default function OrganizationsOverview() {
       </div>
 
       {organizer && (
-        <aside className="lg:sticky lg:top-6">
+        <aside className="lg:sticky lg:top-24">
           <CreateOrganizationForm />
         </aside>
       )}

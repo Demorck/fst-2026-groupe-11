@@ -1,5 +1,7 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router';
-import { ROLE_LABELS } from '../features/auth/types.ts';
+import BrandMark from '../components/BrandMark.tsx';
+import DialogHost from '../components/DialogHost.tsx';
+import { hasRole, ROLE_LABELS } from '../features/auth/types.ts';
 import { clearSession, useSession } from '../features/auth/session.ts';
 import { usePendingInvitations } from '../features/organizations/pendingInvitations.ts';
 
@@ -22,8 +24,7 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
 export default function RootLayout() {
   const session = useSession();
   const navigate = useNavigate();
-  const inOrganizations =
-    session?.user.role === 'ORGANIZER' || session?.user.role === 'VOLUNTEER';
+  const inOrganizations = hasRole(session?.user.role, 'VOLUNTEER');
   const pendingInvitations = usePendingInvitations(inOrganizations);
 
   async function logout() {
@@ -32,14 +33,15 @@ export default function RootLayout() {
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-line bg-white">
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-30 border-b border-line bg-white print:hidden">
         {/* Two rows below xl (brand and account, then the links), one row from xl on */}
-        <nav className="mx-auto flex max-w-[1120px] flex-wrap items-center gap-x-6 px-4 sm:px-6">
+        <nav className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-x-6 px-4 sm:px-6">
           <Link
             to="/"
-            className="py-2 font-display text-xl font-bold text-ink hover:text-ink"
+            className="flex items-center gap-2 py-2 font-display text-xl font-bold text-ink hover:text-ink"
           >
+            <BrandMark className="size-6 text-brand" />
             G-Event
           </Link>
           <div className="order-last -mx-4 flex w-[calc(100%+2rem)] gap-5 overflow-x-auto px-4 whitespace-nowrap sm:-mx-6 sm:w-[calc(100%+3rem)] sm:px-6 xl:order-none xl:mx-0 xl:w-auto xl:overflow-visible xl:px-0">
@@ -67,7 +69,7 @@ export default function RootLayout() {
                 {pendingInvitations > 0 && (
                   <span
                     aria-label={`${pendingInvitations} invitation(s) en attente`}
-                    className="ml-1.5 rounded-full bg-brand px-1.5 py-0.5 text-xs font-semibold text-white"
+                    className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-brand px-1.5 py-0.5 text-center text-xs font-semibold text-white"
                   >
                     {pendingInvitations}
                   </span>
@@ -107,9 +109,18 @@ export default function RootLayout() {
           </div>
         </nav>
       </header>
-      <main className="mx-auto max-w-[1120px] px-4 pt-8 pb-16 sm:px-6 sm:pt-10">
+      <main className="mx-auto w-full max-w-[1240px] flex-1 px-4 pt-6 pb-16 sm:px-6 sm:pt-8 print:max-w-none print:p-0">
         <Outlet />
       </main>
+      <footer className="border-t border-line bg-white print:hidden">
+        <div className="mx-auto flex max-w-[1240px] items-center px-4 py-5 text-sm text-muted sm:px-6">
+          <p className="flex items-center gap-2">
+            <BrandMark className="size-5 text-muted" />
+            G-Event, les événements des associations étudiantes
+          </p>
+        </div>
+      </footer>
+      <DialogHost />
     </div>
   );
 }

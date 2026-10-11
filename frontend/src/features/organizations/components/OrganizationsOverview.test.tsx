@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import type { Role } from '../../auth/types.ts';
+import DialogHost from '../../../components/DialogHost.tsx';
 import OrganizationsOverview from './OrganizationsOverview.tsx';
 
 function logInAs(role: Role) {
@@ -48,6 +49,7 @@ const renderOverview = () =>
   render(
     <MemoryRouter>
       <OrganizationsOverview />
+      <DialogHost />
     </MemoryRouter>,
   );
 
@@ -153,6 +155,36 @@ describe('OrganizationsOverview', () => {
     );
   });
 
+  it('sends the chosen logo once the organization is created', async () => {
+    logInAs('ORGANIZER');
+    const fetch = stubApi({
+      post: () => new Response(JSON.stringify({ ...bde, id: 'o9' })),
+    });
+    renderOverview();
+    const logo = new File(['x'], 'logo.png', { type: 'image/png' });
+
+    await userEvent.type(await screen.findByLabelText('Nom'), 'BDE Nancy');
+    await userEvent.upload(screen.getByLabelText(/Logo/), logo);
+    expect(screen.getByText('logo.png')).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole('button', { name: "Créer l'organisation" }),
+    );
+
+    await vi.waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/organizations/o9/logo',
+        expect.objectContaining({ method: 'PUT', body: logo }),
+      ),
+    );
+    const methods = fetch.mock.calls
+      .filter(([, init]) => init?.method)
+      .map(([url, init]) => `${init?.method} ${url}`);
+    expect(methods).toEqual([
+      'POST /api/organizations',
+      'PUT /api/organizations/o9/logo',
+    ]);
+  });
+
   it('lets a volunteer leave an organization from the list', async () => {
     logInAs('VOLUNTEER');
     const fetch = stubApi({ mine: [{ ...bde, role: 'VOLUNTEER' }] });
@@ -192,7 +224,7 @@ describe('OrganizationsOverview', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
       /co-gestionnaires/,
     );
   });

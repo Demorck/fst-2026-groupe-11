@@ -1,3 +1,4 @@
+import { useNow } from '../../../hooks/useNow.ts';
 import type { Shift } from '../types.ts';
 
 const formatDay = (iso: string) =>
@@ -28,6 +29,7 @@ export default function ShiftList({
   onLeave,
   busy,
 }: ShiftListProps) {
+  const now = useNow();
   if (shifts.length === 0) {
     return <p className="card text-muted">Aucun créneau pour cet événement.</p>;
   }
@@ -36,6 +38,8 @@ export default function ShiftList({
     <ul className="flex flex-col gap-3.5">
       {shifts.map((shift) => {
         const full = shift.registered >= shift.requiredVolunteers;
+        // Past shifts are history (hours, attestation): the API refuses a new sign-up
+        const ended = Date.parse(shift.endsAt) <= now;
         const fill = Math.min(
           Math.round((shift.registered / shift.requiredVolunteers) * 100),
           100,
@@ -79,7 +83,9 @@ export default function ShiftList({
             </div>
             {onJoin && onLeave && (
               <div className="flex w-45 justify-end">
-                {shift.assigned ? (
+                {ended ? (
+                  <span className="badge">Terminé</span>
+                ) : shift.assigned ? (
                   <button
                     type="button"
                     onClick={() => onLeave(shift)}

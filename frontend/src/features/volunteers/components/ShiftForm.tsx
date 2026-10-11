@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { SyntheticEvent } from 'react';
+import DateTimeField from '../../../components/DateTimeField.tsx';
 import TextField from '../../../components/TextField.tsx';
 import { useSubmit } from '../../auth/hooks/useSubmit.ts';
 import type { Shift, ShiftInput } from '../types.ts';
@@ -31,6 +32,9 @@ export default function ShiftForm({ shift, onSave, onCancel }: ShiftFormProps) {
   const { submit, pending, error } = useSubmit(async () => {
     const start = new Date(startsAt);
     const end = new Date(endsAt);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new Error('Saisissez des dates valides.');
+    }
     if (end <= start) {
       throw new Error('La fin doit être après le début.');
     }
@@ -62,31 +66,51 @@ export default function ShiftForm({ shift, onSave, onCancel }: ShiftFormProps) {
         value={title}
         onChange={(e) => setTitle(e.target.value)}
       />
-      <div className="grid gap-4 sm:grid-cols-3">
-        <TextField
+      <div className="grid gap-4">
+        <DateTimeField
           label="Début"
-          type="datetime-local"
           required
           value={startsAt}
-          onChange={(e) => setStartsAt(e.target.value)}
+          onChange={setStartsAt}
         />
-        <TextField
+        <DateTimeField
           label="Fin"
-          type="datetime-local"
           required
           min={startsAt || undefined}
           value={endsAt}
-          onChange={(e) => setEndsAt(e.target.value)}
+          onChange={setEndsAt}
         />
-        <TextField
-          label="Bénévoles requis"
-          type="number"
-          required
-          min={1}
-          step={1}
-          value={required}
-          onChange={(e) => setRequired(e.target.value)}
-        />
+        <div className="flex items-end gap-2">
+          <div className="min-w-0 flex-1">
+            <TextField
+              label="Bénévoles requis"
+              type="number"
+              required
+              min={1}
+              step={1}
+              value={required}
+              onChange={(e) => setRequired(e.target.value)}
+            />
+          </div>
+          <button
+            type="button"
+            aria-label="Un bénévole de moins"
+            onClick={() =>
+              setRequired(String(Math.max(1, Number(required) - 1)))
+            }
+            className="btn btn-secondary size-11 px-0 text-lg"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            aria-label="Un bénévole de plus"
+            onClick={() => setRequired(String(Number(required) + 1))}
+            className="btn btn-secondary size-11 px-0 text-lg"
+          >
+            +
+          </button>
+        </div>
       </div>
       {error && (
         <p role="alert" className="alert-error">

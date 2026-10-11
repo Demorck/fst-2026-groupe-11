@@ -89,7 +89,7 @@ export default function DashboardView() {
                 type="button"
                 aria-pressed={organizationId === id}
                 onClick={() => setOrganizationId(id)}
-                className="min-h-11 cursor-pointer rounded-full border border-field bg-white px-4 text-sm font-medium aria-pressed:border-brand aria-pressed:bg-brand aria-pressed:text-white"
+                className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-full border border-field bg-white px-4 text-center text-sm font-medium aria-pressed:border-brand aria-pressed:bg-brand aria-pressed:text-white"
               >
                 {name}
               </button>
@@ -100,9 +100,14 @@ export default function DashboardView() {
 
       {loading && <p className="text-muted">Chargement...</p>}
       {!loading && data.events.length === 0 && (
-        <p className="card text-muted">
-          Aucun événement à suivre pour le moment.
-        </p>
+        <div className="card flex flex-col items-start gap-3 p-8">
+          <p className="font-semibold">
+            Aucun événement à suivre pour le moment.
+          </p>
+          <Link to="/events/new" className="btn btn-primary">
+            Créer un événement
+          </Link>
+        </div>
       )}
       {!loading && data.events.length > 0 && (
         <>
@@ -161,7 +166,7 @@ export default function DashboardView() {
                         <td className={cell}>
                           <Link
                             to={`/events/${event.id}`}
-                            className="font-semibold text-ink hover:text-brand hover:underline"
+                            className="font-semibold text-ink"
                           >
                             {event.title}
                           </Link>

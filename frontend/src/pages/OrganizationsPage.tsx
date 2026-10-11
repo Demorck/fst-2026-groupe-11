@@ -1,6 +1,8 @@
+import { useDocumentTitle } from '../hooks/useDocumentTitle.ts';
 import OrganizationsOverview from '../features/organizations/components/OrganizationsOverview.tsx';
 
 export default function OrganizationsPage() {
+  useDocumentTitle('Mes organisations');
   return (
     <div className="space-y-7">
       <div>

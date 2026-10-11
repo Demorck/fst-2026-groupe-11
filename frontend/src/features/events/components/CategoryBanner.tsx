@@ -5,22 +5,29 @@ import type { EventCategory } from '../types.ts';
 export default function CategoryBanner({
   category,
   day,
+  hint,
+  className = 'h-30',
 }: {
   category: EventCategory;
   day: string;
+  /** Short note next to the category: "Demain", "Dans 5 jours". */
+  hint?: string | null;
+  className?: string;
 }) {
   const { tint, ink } = CATEGORY_STYLES[category];
   return (
     <div
-      className="flex h-30 flex-col justify-between p-4"
+      className={`flex flex-col justify-between gap-4 p-4 ${className}`}
       style={{ backgroundColor: tint, color: ink }}
     >
-      <span
-        className="badge self-start bg-white text-[13px]"
-        style={{ color: ink }}
-      >
-        {CATEGORY_LABELS[category]}
-      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="badge bg-white text-[13px]" style={{ color: ink }}>
+          {CATEGORY_LABELS[category]}
+        </span>
+        {hint && (
+          <span className="badge bg-ink text-[13px] text-white">{hint}</span>
+        )}
+      </div>
       <span className="font-display text-[28px] leading-none font-bold">
         {day}
       </span>

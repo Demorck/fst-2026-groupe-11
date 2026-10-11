@@ -1,15 +1,20 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
+import { bookTicket, cancelTicket } from '../features/tickets/store.ts';
 import EventDetailPage from './EventDetailPage.tsx';
 import EventsPage from './EventsPage.tsx';
+
+// Relative dates: the detail page closes the reservations of an event that has started
+const inThirtyDays = Date.now() + 30 * 86_400_000;
 
 const event = {
   id: 'e1',
   title: 'Gala',
   description: 'Soirée',
-  startsAt: '2026-12-01T19:00:00.000Z',
-  endsAt: '2026-12-01T23:00:00.000Z',
+  startsAt: new Date(inThirtyDays).toISOString(),
+  endsAt: new Date(inThirtyDays + 4 * 3_600_000).toISOString(),
   location: 'Nancy',
   capacity: 50,
   category: 'PARTY',
@@ -70,7 +75,9 @@ describe('EventsPage', () => {
       '/events/e1',
     );
     expect(screen.getByText('12 place(s) restante(s)')).toBeInTheDocument();
-    expect(screen.getByText('Soirée')).toBeInTheDocument();
+    // the pill of the filter shares this label: look inside the card
+    const card = screen.getByRole('link', { name: 'Gala' }).closest('li');
+    expect(within(card as HTMLElement).getByText('Soirée')).toBeInTheDocument();
     expect(fetch.mock.calls[0][0]).toMatch(/^\/api\/events\?from=/);
   });
 
@@ -82,6 +89,35 @@ describe('EventsPage', () => {
     expect(within(bubbles).getAllByRole('listitem')).toHaveLength(2);
     expect(within(bubbles).getByText('BDE Nancy')).toBeInTheDocument();
     expect(within(bubbles).getByText('Club Sport')).toBeInTheDocument();
+  });
+
+  it('filters the list by category and by search', async () => {
+    const other = { ...event, id: 'e2', title: 'Tournoi', category: 'SPORT' };
+    renderAt('/', json([event, other]));
+    await screen.findByRole('link', { name: 'Gala' });
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Sport' }));
+
+    expect(screen.queryByRole('link', { name: 'Gala' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Tournoi' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Toutes' }));
+    await userEvent.type(
+      screen.getByRole('searchbox', { name: 'Rechercher un événement' }),
+      'gal',
+    );
+
+    expect(screen.getByRole('link', { name: 'Gala' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Tournoi' })).toBeNull();
+
+    await userEvent.type(
+      screen.getByRole('searchbox', { name: 'Rechercher un événement' }),
+      'xyz',
+    );
+
+    expect(
+      screen.getByText('Aucun événement ne correspond à votre recherche.'),
+    ).toBeInTheDocument();
   });
 
   it('shows three organizations at most on a card, then how many more', async () => {
@@ -284,5 +320,204 @@ describe('EventDetailPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'Page introuvable' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('a full event', () => {
+  const full = { ...event, remainingSeats: 0 };
+  const heldTicket = {
+    id: 't1',
+    code: 'ABCD2345',
+    status: 'RESERVED',
+    checkedInAt: null,
+    createdAt: '2026-10-01T10:00:00.000Z',
+    event: { ...event, id: 'e1' },
+  };
+
+  function renderWithTickets(path: string, body: unknown, tickets: unknown[]) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        Promise.resolve(url === '/api/me/tickets' ? json(tickets) : json(body)),
+      ),
+    );
+    const router = createMemoryRouter(
+      [
+        { path: '/', element: <EventsPage /> },
+        { path: '/events/:eventId', element: <EventDetailPage /> },
+      ],
+      { initialEntries: [path] },
+    );
+    render(<RouterProvider router={router} />);
+  }
+
+  it('keeps the color of its category, and tells a visitor that no ticket is left', async () => {
+    renderAt('/', json([full]));
+
+    const card = (await screen.findByRole('link', { name: 'Gala' })).closest(
+      'li',
+    ) as HTMLElement;
+    expect(within(card).getByText("Aucun billet n'est disponible")).toHaveClass(
+      'badge-danger',
+    );
+    // PARTY tint, not the grey of "OTHER"
+    expect(card.firstElementChild).not.toHaveStyle({
+      backgroundColor: '#ECEDF1',
+    });
+  });
+
+  it('shows the ticket held instead of the red bubble', async () => {
+    logInAs('PARTICIPANT');
+    renderWithTickets('/', [full], [heldTicket]);
+
+    const card = (await screen.findByRole('link', { name: 'Gala' })).closest(
+      'li',
+    ) as HTMLElement;
+    expect(await within(card).findByText('Vous avez un billet')).toBeVisible();
+    expect(
+      within(card).queryByText("Aucun billet n'est disponible"),
+    ).toBeNull();
+  });
+
+  it.each(['VOLUNTEER', 'ORGANIZER'])(
+    'shows the red bubble to a %s, who books like a participant',
+    async (role) => {
+      logInAs(role);
+      renderWithTickets('/', [full], []);
+
+      await screen.findByRole('link', { name: 'Gala' });
+      expect(
+        await screen.findByText("Aucun billet n'est disponible"),
+      ).toBeVisible();
+    },
+  );
+
+  it('has no red bubble while there are seats left', async () => {
+    renderAt('/', json([event]));
+
+    await screen.findByRole('link', { name: 'Gala' });
+    expect(screen.queryByText("Aucun billet n'est disponible")).toBeNull();
+  });
+
+  it('says so on the detail page, unless the participant holds a ticket', async () => {
+    logInAs('PARTICIPANT');
+    renderWithTickets('/events/e1', full, []);
+    expect(
+      await screen.findByText("Aucun billet n'est disponible"),
+    ).toBeInTheDocument();
+  });
+
+  it('hides the red bubble on the detail page for the holder of a ticket', async () => {
+    logInAs('PARTICIPANT');
+    renderWithTickets('/events/e1', full, [heldTicket]);
+
+    await screen.findByText(/Votre place est réservée/);
+    expect(screen.queryByText("Aucun billet n'est disponible")).toBeNull();
+  });
+});
+
+describe('check-in link', () => {
+  it.each([
+    ['an organizer of the event', true],
+    ['another organizer', false],
+  ])('is shown to %s: %s', async (_who, canManage) => {
+    logInAs('ORGANIZER');
+    renderAt('/events/e1', json({ ...event, canManage }));
+
+    await screen.findByRole('heading', { name: 'Gala' });
+    expect(!!screen.queryByRole('link', { name: 'Gérer le check-in' })).toBe(
+      canManage,
+    );
+  });
+});
+
+describe('EventDetailPage when the event changes', () => {
+  it('ignores a slow answer for the event that was left', async () => {
+    let release: (response: Response) => void = () => {};
+    const slow = new Promise<Response>((resolve) => (release = resolve));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url === '/api/events/e1'
+          ? slow
+          : Promise.resolve(json({ ...event, id: 'e2', title: 'Tournoi' })),
+      ),
+    );
+    const router = createMemoryRouter(
+      [{ path: '/events/:eventId', element: <EventDetailPage /> }],
+      { initialEntries: ['/events/e1'] },
+    );
+    render(<RouterProvider router={router} />);
+
+    await act(() => router.navigate('/events/e2'));
+    expect(
+      await screen.findByRole('heading', { name: 'Tournoi' }),
+    ).toBeInTheDocument();
+
+    await act(async () => release(json(event)));
+    expect(
+      screen.getByRole('heading', { name: 'Tournoi' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Gala' })).toBeNull();
+  });
+});
+
+describe('pages that read again after a booking or a cancellation', () => {
+  // The event is read ok, then fails once (the booking bumps the version), then answers again
+  function renderFlaky(path: string, ok: unknown) {
+    let reads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url === '/api/me/tickets') return Promise.resolve(json([]));
+        if (init?.method) return Promise.resolve(json({ id: 't1' }));
+        reads += 1;
+        return Promise.resolve(
+          reads === 2 ? json({ message: 'Boom' }, 500) : json(ok),
+        );
+      }),
+    );
+    const router = createMemoryRouter(
+      [
+        { path: '/', element: <EventsPage /> },
+        { path: '/events/:eventId', element: <EventDetailPage /> },
+      ],
+      { initialEntries: [path] },
+    );
+    render(<RouterProvider router={router} />);
+  }
+
+  it('lets the detail page recover after a transient failure', async () => {
+    logInAs('PARTICIPANT');
+    renderFlaky('/events/e1', event);
+    expect(
+      await screen.findByRole('heading', { name: 'Gala' }),
+    ).toBeInTheDocument();
+
+    await act(() => bookTicket('e1')); // version up: the read fails
+    expect(await screen.findByText(/Boom/)).toBeInTheDocument();
+
+    await act(() => cancelTicket('e1')); // version up again: the read answers
+    expect(
+      await screen.findByRole('heading', { name: 'Gala' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Boom/)).toBeNull();
+  });
+
+  it('lets the list recover after a transient failure', async () => {
+    logInAs('PARTICIPANT');
+    renderFlaky('/', [event]);
+    expect(
+      await screen.findByRole('link', { name: 'Gala' }),
+    ).toBeInTheDocument();
+
+    await act(() => bookTicket('e1'));
+    expect(await screen.findByText(/Boom/)).toBeInTheDocument();
+
+    await act(() => cancelTicket('e1'));
+    expect(
+      await screen.findByRole('link', { name: 'Gala' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Boom/)).toBeNull();
   });
 });

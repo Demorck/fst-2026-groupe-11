@@ -36,7 +36,7 @@ export default function AuditLog({
 
   return (
     <section aria-labelledby="audit" className="space-y-3">
-      <h2 id="audit" className="text-xl font-semibold">
+      <h2 id="audit" className="text-lg font-semibold">
         Journal
       </h2>
       {error && (
@@ -44,8 +44,10 @@ export default function AuditLog({
           {error}
         </p>
       )}
-      {entries?.length === 0 && <p>Rien à signaler.</p>}
-      <ul className="space-y-1 text-sm">
+      {entries?.length === 0 && (
+        <p className="card text-sm text-muted">Rien à signaler.</p>
+      )}
+      <ul className="card max-h-80 space-y-2 overflow-y-auto p-4 text-sm empty:hidden">
         {entries?.map((entry) => (
           <li key={entry.id}>
             <time dateTime={entry.createdAt} className="mr-2 text-muted">

@@ -18,11 +18,40 @@ export default function HealthPage() {
   }, []);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <h1 className="page-title">État de l'API</h1>
       {error && <p className="alert-error">Erreur : {error}</p>}
       {!error && !health && <p>Chargement...</p>}
-      {health && <pre className="card">{JSON.stringify(health, null, 2)}</pre>}
+      {health && (
+        <>
+          <dl className="grid gap-4 sm:grid-cols-3">
+            <div className="card">
+              <dt className="text-sm text-muted">État</dt>
+              <dd>
+                <span className="badge badge-ok">{health.status}</span>
+              </dd>
+            </div>
+            <div className="card">
+              <dt className="text-sm text-muted">Heure de la base</dt>
+              <dd className="font-semibold">{health.databaseTime}</dd>
+            </div>
+            <div className="card">
+              <dt className="text-sm text-muted">Utilisateurs</dt>
+              <dd className="font-display text-2xl font-bold">
+                {health.users}
+              </dd>
+            </div>
+          </dl>
+          <details className="card">
+            <summary className="cursor-pointer text-sm font-medium">
+              Réponse brute
+            </summary>
+            <pre className="mt-3 overflow-x-auto text-sm">
+              {JSON.stringify(health, null, 2)}
+            </pre>
+          </details>
+        </>
+      )}
     </div>
   );
 }

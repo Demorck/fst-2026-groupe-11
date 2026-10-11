@@ -1,17 +1,14 @@
 import { useEffect, useState } from 'react';
-import type { CSSProperties, SyntheticEvent } from 'react';
+import type { SyntheticEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import TextField from '../../../components/TextField.tsx';
 import { useSubmit } from '../../auth/hooks/useSubmit.ts';
 import { getMyOrganizations } from '../../organizations/api.ts';
 import type { MyOrganization } from '../../organizations/types.ts';
 import { createEvent } from '../api.ts';
+import DateTimeField from '../../../components/DateTimeField.tsx';
+import CategoryChips from './CategoryChips.tsx';
 import EventPreview from './EventPreview.tsx';
-import {
-  CATEGORY_LABELS,
-  CATEGORY_STYLES,
-  EVENT_CATEGORIES,
-} from '../types.ts';
 import type { EventCategory } from '../types.ts';
 
 export default function CreateEventForm() {
@@ -32,6 +29,9 @@ export default function CreateEventForm() {
     // datetime-local has no timezone, Date reads it as local time
     const start = new Date(startsAt);
     const end = new Date(endsAt);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new Error('Saisissez des dates valides.');
+    }
     if (end <= start) {
       throw new Error('La fin doit être après le début.');
     }
@@ -114,58 +114,35 @@ export default function CreateEventForm() {
             <span>Description</span>
             <textarea
               required
-              rows={5}
+              rows={4}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="field"
             />
           </label>
-          <fieldset className="space-y-2">
-            <legend className="mb-1 text-sm font-medium">Catégorie</legend>
-            <div className="flex flex-wrap gap-2">
-              {EVENT_CATEGORIES.map((c) => (
-                <label
-                  key={c}
-                  className="chip has-[:checked]:border-(--ink) has-[:checked]:bg-(--tint) has-[:checked]:text-(--ink)"
-                  style={
-                    {
-                      '--tint': CATEGORY_STYLES[c].tint,
-                      '--ink': CATEGORY_STYLES[c].ink,
-                    } as CSSProperties
-                  }
-                >
-                  <input
-                    type="radio"
-                    name="category"
-                    value={c}
-                    checked={category === c}
-                    onChange={() => setCategory(c)}
-                    className="sr-only"
-                  />
-                  {CATEGORY_LABELS[c]}
-                </label>
-              ))}
-            </div>
-          </fieldset>
+          <CategoryChips
+            name="category"
+            legend="Catégorie"
+            value={category}
+            onChange={(c) => c && setCategory(c)}
+          />
         </section>
 
         <section className="space-y-5 border-t border-line-soft pt-6">
           <h2 className="text-lg font-semibold">Date et lieu</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <TextField
+            <DateTimeField
               label="Début"
-              type="datetime-local"
               required
               value={startsAt}
-              onChange={(e) => setStartsAt(e.target.value)}
+              onChange={setStartsAt}
             />
-            <TextField
+            <DateTimeField
               label="Fin"
-              type="datetime-local"
               required
               min={startsAt || undefined}
               value={endsAt}
-              onChange={(e) => setEndsAt(e.target.value)}
+              onChange={setEndsAt}
             />
           </div>
           <TextField
@@ -178,22 +155,30 @@ export default function CreateEventForm() {
 
         <section className="space-y-5 border-t border-line-soft pt-6">
           <h2 className="text-lg font-semibold">Public et organisation</h2>
-          <div className="relative max-w-xs">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div className="relative">
+              <TextField
+                label="Capacité"
+                type="number"
+                required
+                min={1}
+                step={1}
+                value={capacity}
+                onChange={(e) => setCapacity(e.target.value)}
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute right-10 bottom-2.5 text-sm text-muted"
+              >
+                places
+              </span>
+            </div>
             <TextField
-              label="Capacité"
-              type="number"
-              required
-              min={1}
-              step={1}
-              value={capacity}
-              onChange={(e) => setCapacity(e.target.value)}
+              label="Image (URL, facultatif)"
+              type="url"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
             />
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute right-10 bottom-2.5 text-sm text-muted"
-            >
-              places
-            </span>
           </div>
           <fieldset className="space-y-2">
             <legend className="mb-1 text-sm font-medium">
@@ -213,12 +198,6 @@ export default function CreateEventForm() {
               ))}
             </div>
           </fieldset>
-          <TextField
-            label="Image (URL, facultatif)"
-            type="url"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-          />
         </section>
 
         {error && (
@@ -243,7 +222,7 @@ export default function CreateEventForm() {
         </div>
       </form>
 
-      <aside className="space-y-4 lg:sticky lg:top-6">
+      <aside className="space-y-4 lg:sticky lg:top-24">
         <p className="text-sm font-medium">Aperçu dans la liste</p>
         <EventPreview
           title={title}

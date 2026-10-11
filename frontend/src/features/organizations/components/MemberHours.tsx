@@ -30,44 +30,48 @@ export default function MemberHours({
           {error}
         </p>
       )}
-      {!rows && !error && <p>Chargement...</p>}
-      {rows?.length === 0 && <p>Aucun bénévole pour l'instant.</p>}
+      {!rows && !error && <p className="text-muted">Chargement...</p>}
+      {rows?.length === 0 && (
+        <p className="card text-muted">Aucun bénévole pour l'instant.</p>
+      )}
       {rows && rows.length > 0 && (
-        <table className="w-full max-w-2xl text-left text-sm">
-          <thead>
-            <tr className="border-b border-line text-muted">
-              <th className="py-2 pr-4 font-medium">Bénévole</th>
-              <th className="py-2 pr-4 font-medium">Créneaux</th>
-              <th className="py-2 pr-4 font-medium">Heures</th>
-              <th className="py-2 font-medium">Attestation</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.userId} className="border-b border-line-soft">
-                <td className="py-2 pr-4">
-                  {row.name}
-                  {row.status !== 'ACCEPTED' && (
-                    <span className="ml-2 text-xs text-muted">
-                      ({STATUS_LABELS[row.status].toLowerCase()})
-                    </span>
-                  )}
-                </td>
-                <td className="py-2 pr-4">{row.shifts}</td>
-                <td className="py-2 pr-4">{row.hours} h</td>
-                <td className="py-2">
-                  <Link
-                    to={`/organizations/${organizationId}/attestation/${row.userId}`}
-                    aria-label={`Attestation de ${row.name}`}
-                    className="underline"
-                  >
-                    Ouvrir
-                  </Link>
-                </td>
+        <div className="overflow-x-auto rounded-xl border border-line bg-white">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="bg-canvas text-[13px] text-muted">
+                <th className="px-4 py-3 font-semibold">Bénévole</th>
+                <th className="px-4 py-3 font-semibold">Créneaux</th>
+                <th className="px-4 py-3 font-semibold">Heures</th>
+                <th className="px-4 py-3 font-semibold">Attestation</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.userId} className="border-b border-line-soft">
+                  <td className="px-4 py-2.5">
+                    {row.name}
+                    {row.status !== 'ACCEPTED' && (
+                      <span className="ml-2 text-xs text-muted">
+                        ({STATUS_LABELS[row.status].toLowerCase()})
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5">{row.shifts}</td>
+                  <td className="px-4 py-2.5">{row.hours} h</td>
+                  <td className="px-4 py-2.5">
+                    <Link
+                      to={`/organizations/${organizationId}/attestation/${row.userId}`}
+                      aria-label={`Attestation de ${row.name}`}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      Ouvrir
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );
