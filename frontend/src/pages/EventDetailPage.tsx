@@ -1,12 +1,15 @@
 import { useDocumentTitle } from '../hooks/useDocumentTitle.ts';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { ApiError } from '../api/client.ts';
 import { useSession } from '../features/auth/session.ts';
 import { hasRole } from '../features/auth/types.ts';
-import { getEvent } from '../features/events/api.ts';
+import { deleteEvent, getEvent } from '../features/events/api.ts';
+import { EVENT_ERRORS } from '../features/events/messages.ts';
+import ConfirmButton from '../components/ConfirmButton.tsx';
 import ProgressBar from '../components/ProgressBar.tsx';
+import { alertDialog, toast } from '../components/dialogs.ts';
 import {
   CATEGORY_LABELS,
   CATEGORY_STYLES,
@@ -22,6 +25,7 @@ import NotFoundPage from './NotFoundPage.tsx';
 export default function EventDetailPage() {
   const { eventId = '' } = useParams();
   const role = useSession()?.user.role;
+  const navigate = useNavigate();
   const { held, loading: ticketsLoading } = useHeldTicket(eventId);
   const [event, setEvent] = useState<EventWithAccess | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -62,6 +66,20 @@ export default function EventDetailPage() {
   const time = (date: Date) =>
     date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const sameDay = start.toDateString() === end.toDateString();
+
+  async function remove() {
+    try {
+      await deleteEvent(eventId);
+      toast('Événement supprimé.');
+      await navigate('/');
+    } catch (err) {
+      const message = (err as Error).message;
+      void alertDialog({
+        title: 'Suppression impossible',
+        message: EVENT_ERRORS[message] ?? message,
+      });
+    }
+  }
 
   return (
     <article className="space-y-6">
@@ -205,6 +223,22 @@ export default function EventDetailPage() {
             >
               Gérer le check-in
             </Link>
+          )}
+          {event.canManage && (
+            <>
+              <Link
+                to={`/events/${event.id}/edit`}
+                className="btn btn-secondary"
+              >
+                Modifier l'événement
+              </Link>
+              <ConfirmButton
+                label="Supprimer l'événement"
+                question="Supprimer cet événement ?"
+                details="Ses créneaux vides disparaissent aussi. Impossible dès qu'un billet est réservé ou qu'un bénévole est inscrit."
+                onConfirm={remove}
+              />
+            </>
           )}
         </aside>
       </div>
