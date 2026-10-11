@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -486,5 +486,130 @@ describe('VolunteerShiftsPage as organizer', () => {
     expect(await screen.findByRole('alertdialog')).toHaveTextContent(
       'Not the organizer',
     );
+  });
+});
+
+describe('VolunteerShiftsPage coverage for a manager', () => {
+  const alice = {
+    id: 'v1',
+    name: 'Alice',
+    organizations: [
+      { id: 'o1', name: 'BDE Nancy' },
+      { id: 'o2', name: 'Club Sport' },
+    ],
+    removable: true,
+  };
+  const bob = {
+    id: 'v2',
+    name: 'Bob',
+    organizations: [{ id: 'o3', name: 'Asso Numérique' }],
+    removable: false,
+  };
+  // Bar misses one volunteer, Accueil is covered
+  const covered = [
+    { ...shifts[0], volunteers: [alice, bob] },
+    { ...shifts[1], volunteers: [alice] },
+  ];
+  const team = () =>
+    within(screen.getByRole('region', { name: 'Bénévoles inscrits' }));
+
+  it('names the volunteers of each shift and flags the incomplete ones', async () => {
+    logInAs('ORGANIZER');
+    stubApi(vi.fn().mockResolvedValue(json(covered)));
+
+    renderPage();
+
+    const bar = (await screen.findByRole('heading', { name: 'Bar' })).closest(
+      'li',
+    ) as HTMLElement;
+    expect(within(bar).getByText('Alice, Bob')).toBeVisible();
+    expect(within(bar).getByText('Manque 1')).toBeVisible();
+    expect(screen.getAllByText(/^Manque/)).toHaveLength(1);
+  });
+
+  it('lists each volunteer once with their organizations and shifts', async () => {
+    logInAs('ORGANIZER');
+    stubApi(vi.fn().mockResolvedValue(json(covered)));
+
+    renderPage();
+
+    await screen.findByRole('region', { name: 'Bénévoles inscrits' });
+    expect(team().getAllByRole('listitem')).toHaveLength(2);
+    expect(team().getByText('BDE Nancy · Club Sport')).toBeVisible();
+    expect(team().getByText('2 créneaux')).toBeVisible();
+    expect(team().getByText('Asso Numérique')).toBeVisible();
+    // Only for a volunteer of an organization I manage
+    expect(
+      team().getByRole('button', { name: "Retirer Alice de l'événement" }),
+    ).toBeVisible();
+    expect(team().queryByRole('button', { name: /Retirer Bob/ })).toBeNull();
+  });
+
+  it('removes a volunteer from the event after a confirmation', async () => {
+    logInAs('ORGANIZER');
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(covered))
+      .mockResolvedValueOnce(json({ removed: 2 }))
+      .mockResolvedValueOnce(json([{ ...shifts[0], volunteers: [bob] }]));
+    stubApi(fetch);
+    renderPage();
+
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: "Retirer Alice de l'événement",
+      }),
+    );
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Confirmer' }),
+    );
+
+    await vi.waitFor(() => expect(team().queryByText('Alice')).toBeNull());
+    const [url, init] = fetch.mock.calls[1] as [string, RequestInit];
+    expect(url).toBe('/api/events/e1/volunteers/v1');
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('explains a refused removal', async () => {
+    logInAs('ORGANIZER');
+    stubApi(
+      vi
+        .fn()
+        .mockResolvedValueOnce(json(covered))
+        .mockResolvedValueOnce(
+          json(
+            { message: 'Not a volunteer of one of your organizations' },
+            403,
+          ),
+        )
+        .mockResolvedValueOnce(json(covered)),
+    );
+    renderPage();
+
+    await userEvent.click(
+      await screen.findByRole('button', {
+        name: "Retirer Alice de l'événement",
+      }),
+    );
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Confirmer' }),
+    );
+
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent(
+      "Ce bénévole n'est dans aucune organisation que vous gérez.",
+    );
+  });
+
+  it('shows no names to a volunteer', async () => {
+    logInAs('VOLUNTEER');
+    stubApi(vi.fn().mockResolvedValue(json(shifts)), false);
+
+    renderPage();
+
+    await screen.findByRole('heading', { name: 'Bar' });
+    expect(
+      screen.queryByRole('region', { name: 'Bénévoles inscrits' }),
+    ).toBeNull();
+    expect(screen.queryByText(/^Manque/)).toBeNull();
   });
 });

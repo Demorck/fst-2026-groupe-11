@@ -14,11 +14,17 @@ import {
   joinShift,
   leaveShift,
   listShifts,
+  removeFromEvent,
   updateShift,
 } from '../features/volunteers/api.ts';
+import EventVolunteers from '../features/volunteers/components/EventVolunteers.tsx';
 import ShiftForm from '../features/volunteers/components/ShiftForm.tsx';
 import ShiftList from '../features/volunteers/components/ShiftList.tsx';
-import type { Shift, ShiftInput } from '../features/volunteers/types.ts';
+import type {
+  Shift,
+  ShiftInput,
+  ShiftVolunteer,
+} from '../features/volunteers/types.ts';
 
 // The API answers in English, the interface speaks French
 const ERROR_MESSAGES: Record<string, string> = {
@@ -31,6 +37,10 @@ const ERROR_MESSAGES: Record<string, string> = {
     'Ce créneau chevauche un autre de vos créneaux.',
   'Not a volunteer of an organization of this event':
     "Vous n'êtes bénévole d'aucune organisation de cet événement.",
+  'Not a volunteer of one of your organizations':
+    "Ce bénévole n'est dans aucune organisation que vous gérez.",
+  'Not registered on this event':
+    "Ce bénévole n'a plus de créneau à venir sur cet événement.",
 };
 
 export default function VolunteerShiftsPage() {
@@ -110,6 +120,20 @@ export default function VolunteerShiftsPage() {
     setBusy(false);
   }
 
+  async function removeVolunteer(volunteer: ShiftVolunteer) {
+    try {
+      await removeFromEvent(eventId, volunteer.id);
+      toast(`${volunteer.name} a été retiré(e) de l'événement.`);
+    } catch (err) {
+      const message = (err as Error).message;
+      void alertDialog({
+        title: 'Retrait impossible',
+        message: ERROR_MESSAGES[message] ?? message,
+      });
+    }
+    await load();
+  }
+
   // Only the managers of the event edit its shifts (the API refuses the other organizers)
   const canManage = user?.role === 'ORGANIZER' && event?.canManage === true;
   const mine = shifts?.filter((s) => s.assigned).length ?? 0;
@@ -140,7 +164,7 @@ export default function VolunteerShiftsPage() {
       {!error && !shifts && <p className="text-muted">Chargement...</p>}
       {shifts && (
         <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-6">
             <ShiftList
               shifts={shifts}
               onEdit={canManage ? setEditing : undefined}
@@ -149,6 +173,10 @@ export default function VolunteerShiftsPage() {
               onLeave={isVolunteer ? (s) => void toggle(s) : undefined}
               busy={busy}
             />
+            {/* The API sends the names to the managers only */}
+            {shifts.some((s) => s.volunteers) && (
+              <EventVolunteers shifts={shifts} onRemove={removeVolunteer} />
+            )}
           </div>
           <aside className="space-y-4 max-lg:order-first lg:sticky lg:top-24">
             {required > 0 && (
