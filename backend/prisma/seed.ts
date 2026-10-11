@@ -281,6 +281,10 @@ const SHIFTS: [number, number, string, number, number, string[]][] = [
   [8, 7, 'Buvette', 2, 0, ['benevole1', 'benevole2']],
   // Starts in a few hours and nobody yet: flagged as incomplete on the dashboard
   [9, 5, 'Rangement', 2, 3 * HOUR, []],
+  // An organizer works a shift too (organizer inherits volunteer): a manager of the BDE
+  [10, 1, 'Buvette', 1, 2 * HOUR, ['orga']],
+  // Past, worked by a manager: listed in the hours of the BDE with an attestation, like a volunteer
+  [11, 6, 'Logistique', 1, 1 * HOUR, ['orga']],
 ];
 
 // [event number, participant, status, checked in]
@@ -305,6 +309,10 @@ const TICKETS: [number, string, TicketStatus, boolean][] = [
   [8, 'participant3', TicketStatus.RESERVED, true],
   [8, 'participant4', TicketStatus.RESERVED, true],
   [8, 'participant5', TicketStatus.RESERVED, false],
+  // Volunteers and organizers book tickets too (they inherit the participant rights)
+  [1, 'benevole1', TicketStatus.RESERVED, false], // volunteer, event of their own organization
+  [5, 'benevole3', TicketStatus.RESERVED, false], // volunteer, event of an organization they have not joined
+  [2, 'orga', TicketStatus.RESERVED, false], // organizer, event they manage
 ];
 
 // Readable fixed codes made of the ticket alphabet (no 0/O/1/I/L), e.g. DEMXAAAB
@@ -338,20 +346,25 @@ async function main() {
       update: data,
     });
     organizations.set(key, organization.id);
+    // The first member created the organization; everybody else was invited by them. The app finds
+    // the creator as the only member nobody invited (invitedById null), so this must be set.
+    const creator = members[0][0];
     for (const [user, role, status] of members) {
       const ids = { organizationId: organization.id, userId: userId(user) };
+      const invitedById = user === creator ? null : userId(creator);
       await prisma.organizationMember.upsert({
         where: { organizationId_userId: ids },
         create: {
           ...ids,
           role,
           status,
+          invitedById,
           ...(EXPIRED_INVITATIONS.has(`${key}:${user}`) && {
             invitedAt: new Date(Date.now() - 10 * DAY),
           }),
         },
         // Keeps the answer given while testing an invitation
-        update: { role },
+        update: { role, invitedById },
       });
     }
   }

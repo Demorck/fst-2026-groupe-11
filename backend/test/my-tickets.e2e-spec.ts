@@ -41,19 +41,18 @@ describe('GET /me/tickets (e2e)', () => {
       : req;
   };
 
-  it('returns the tickets of the logged in user', async () => {
-    const res = await get(Role.PARTICIPANT);
+  it.each([Role.PARTICIPANT, Role.VOLUNTEER, Role.ORGANIZER])(
+    'returns the tickets of a logged in %s',
+    async (role) => {
+      const res = await get(role);
 
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual([{ id: 't1', code: 'ABCD2345' }]);
-    expect(findMany.mock.calls[0][0].where.participantId).toBe('u1');
-  });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([{ id: 't1', code: 'ABCD2345' }]);
+      expect(findMany.mock.calls[0][0].where.participantId).toBe('u1');
+    },
+  );
 
   it('rejects an anonymous request', async () => {
     expect((await get()).status).toBe(401);
-  });
-
-  it.each([Role.ORGANIZER, Role.VOLUNTEER])('accepts a %s', async (role) => {
-    expect((await get(role)).status).toBe(200);
   });
 });

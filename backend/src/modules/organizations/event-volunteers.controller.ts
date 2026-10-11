@@ -35,7 +35,7 @@ export class EventVolunteersController {
   })
   @ApiForbiddenResponse({
     description:
-      "Le bénévole n'est pas dans une organisation que vous gérez et qui organise l'événement",
+      "Le bénévole (ou co-gestionnaire, pour le gestionnaire principal) n'est pas dans une organisation que vous gérez et qui organise l'événement",
   })
   @ApiNotFoundResponse({
     description: 'Événement introuvable ou bénévole non inscrit',

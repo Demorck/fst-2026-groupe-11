@@ -422,6 +422,19 @@ describe('OrganizationsService', () => {
       expect(statuses.has('e3')).toBe(false);
     });
 
+    it('counts accepted managers as volunteers of their events, not only volunteers', async () => {
+      const prisma = setup();
+      prisma.eventOrganization.count.mockResolvedValue(1);
+
+      expect(await (await build(prisma)).isVolunteerOfEvent('u1', 'e1')).toBe(
+        true,
+      );
+      expect(
+        prisma.eventOrganization.count.mock.calls[0][0].where.organization
+          .members.some,
+      ).toEqual({ userId: 'u1', status: 'ACCEPTED' });
+    });
+
     it('skips the query without events', async () => {
       const prisma = setup();
 
@@ -477,6 +490,33 @@ describe('OrganizationsService', () => {
         (await build(prisma)).removeVolunteerParticipation('boss', 'e1', 'vol'),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(prisma.shiftAssignment.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('also looks for a co-manager when the actor is the creator, not for other managers', async () => {
+      const prisma = setup();
+      asSharedOrganization(prisma);
+      prisma.shiftAssignment.deleteMany.mockResolvedValue({ count: 1 });
+
+      await (
+        await build(prisma)
+      ).removeVolunteerParticipation('boss', 'e1', 'co');
+
+      const { OR } =
+        prisma.eventOrganization.findFirst.mock.calls[0][0].where.organization;
+      expect(OR).toHaveLength(2);
+      // Branch B: only the creator (nobody invited them) removes a co-manager, never the creator
+      expect(OR[1].AND[0].members.some).toEqual({
+        userId: 'boss',
+        role: OrganizationRole.MANAGER,
+        status: MembershipStatus.ACCEPTED,
+        invitedById: null,
+      });
+      expect(OR[1].AND[1].members.some).toEqual({
+        userId: 'co',
+        role: OrganizationRole.MANAGER,
+        status: MembershipStatus.ACCEPTED,
+        invitedById: { not: null },
+      });
     });
 
     it('throws 404 for an unknown event, and logs nothing for a volunteer not registered', async () => {
@@ -622,6 +662,8 @@ describe('OrganizationsService', () => {
       userId: 'vol',
       role: OrganizationRole.VOLUNTEER,
       status: MembershipStatus.ACCEPTED,
+      // As in real data and in the seed: only the creator has nobody who invited them
+      invitedById: 'creator',
     };
 
     it('removes a member, takes them off their upcoming shifts and logs it', async () => {
@@ -671,11 +713,7 @@ describe('OrganizationsService', () => {
       );
       expect(
         where.shift.event.NOT.organizations.some.organization.members.some,
-      ).toEqual({
-        userId: 'vol',
-        role: OrganizationRole.VOLUNTEER,
-        status: MembershipStatus.ACCEPTED,
-      });
+      ).toEqual({ userId: 'vol', status: MembershipStatus.ACCEPTED });
     });
 
     it('refuses to remove oneself, an unknown or former member', async () => {
@@ -959,16 +997,19 @@ describe('OrganizationsService', () => {
     const volunteers = [
       {
         userId: 'v1',
+        role: OrganizationRole.VOLUNTEER,
         status: MembershipStatus.ACCEPTED,
         user: { id: 'v1', name: 'Bastien' },
       },
       {
         userId: 'v2',
+        role: OrganizationRole.VOLUNTEER,
         status: MembershipStatus.LEFT,
         user: { id: 'v2', name: 'Bérénice' },
       },
       {
         userId: 'v3',
+        role: OrganizationRole.VOLUNTEER,
         status: MembershipStatus.ACCEPTED,
         user: { id: 'v3', name: 'Basile' },
       },
@@ -990,6 +1031,40 @@ describe('OrganizationsService', () => {
       prisma.organizationMember.findMany.mockResolvedValue(volunteers);
       prisma.shiftAssignment.findMany.mockResolvedValue(assignments);
     };
+
+    it('lists a manager who worked shifts, and skips one who did not', async () => {
+      const prisma = setup();
+      asMember(prisma, OrganizationRole.MANAGER);
+      prisma.organizationMember.findMany.mockResolvedValue([
+        {
+          userId: 'm1',
+          role: OrganizationRole.MANAGER,
+          status: MembershipStatus.ACCEPTED,
+          user: { id: 'm1', name: 'Alice' },
+        },
+        {
+          userId: 'm2',
+          role: OrganizationRole.MANAGER,
+          status: MembershipStatus.ACCEPTED,
+          user: { id: 'm2', name: 'Albert' },
+        },
+      ]);
+      prisma.shiftAssignment.findMany.mockResolvedValue([
+        { volunteerId: 'm1', shift: { startsAt: at(9), endsAt: at(11) } },
+      ]);
+
+      const rows = await (await build(prisma)).listHours('o1', 'boss');
+
+      expect(rows).toEqual([
+        {
+          userId: 'm1',
+          name: 'Alice',
+          status: 'ACCEPTED',
+          shifts: 1,
+          hours: 2,
+        },
+      ]);
+    });
 
     it('gives a manager the hours of every volunteer, former ones included', async () => {
       const prisma = setup();

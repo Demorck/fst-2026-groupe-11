@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Role } from '@/generated/prisma/enums.js';
+import { hasRole } from '../roles.js';
 import { ROLES_KEY } from '../decorators/roles.decorator.js';
 import type { AuthenticatedRequest } from './jwt-auth.guard.js';
 
@@ -23,7 +24,7 @@ export class RolesGuard implements CanActivate {
       return true;
     }
     const { user } = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    if (!user || !roles.includes(user.role)) {
+    if (!user || !roles.some((role) => hasRole(user.role, role))) {
       throw new ForbiddenException();
     }
     return true;

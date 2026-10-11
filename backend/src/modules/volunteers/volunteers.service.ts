@@ -81,6 +81,10 @@ export class VolunteersService {
       if (!shift) {
         throw new NotFoundException('Shift not found');
       }
+      // Same rule as the "can join" badge: past shifts are history (hours, attestations), not to be added
+      if (shift.endsAt <= new Date()) {
+        throw new ConflictException('Shift already ended');
+      }
       // Volunteers only work for the organizations they belong to
       if (
         !(await this.organizations.isVolunteerOfEvent(
@@ -121,12 +125,20 @@ export class VolunteersService {
   }
 
   async unassign(shiftId: string, volunteerId: string) {
-    const { count } = await this.prisma.shiftAssignment.deleteMany({
-      where: { shiftId, volunteerId },
+    const assignment = await this.prisma.shiftAssignment.findUnique({
+      where: { shiftId_volunteerId: { shiftId, volunteerId } },
+      select: { shift: { select: { endsAt: true } } },
     });
-    if (count === 0) {
+    if (!assignment) {
       throw new NotFoundException('Not registered on this shift');
     }
+    // Past shifts are history (hours, attestation): nobody erases their own after the fact
+    if (assignment.shift.endsAt <= new Date()) {
+      throw new ConflictException('Shift already ended');
+    }
+    await this.prisma.shiftAssignment.deleteMany({
+      where: { shiftId, volunteerId },
+    });
   }
 
   async updateShift(id: string, dto: UpdateShiftDto, userId: string) {

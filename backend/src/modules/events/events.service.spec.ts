@@ -145,10 +145,56 @@ describe('EventsService', () => {
       volunteers: { required: 0, registered: 0, missing: 0 },
       remainingSeats: 0,
       volunteerStatus: null,
+      canManage: false,
+    });
+  });
+
+  describe('canManage', () => {
+    const row = {
+      id: 'e1',
+      capacity: 10,
+      _count: { tickets: 0 },
+      shifts: [],
+      organizations: [],
+    };
+
+    it.each([
+      ['an organizer who manages the event', true],
+      ['an organizer who does not', false],
+    ])('tells %s', async (_who, manages) => {
+      const findUnique = vi.fn().mockResolvedValue(row);
+      const canManageEvent = vi.fn().mockResolvedValue(manages);
+
+      const event = await (
+        await build({ findUnique }, { canManageEvent })
+      ).findOne('e1', { id: 'u1', role: Role.ORGANIZER });
+
+      expect(canManageEvent).toHaveBeenCalledWith('u1', 'e1');
+      expect(event.canManage).toBe(manages);
+    });
+
+    it.each([
+      ['a volunteer', { id: 'u1', role: Role.VOLUNTEER }],
+      ['a visitor', undefined],
+    ])('never asks for %s', async (_who, user) => {
+      const findUnique = vi.fn().mockResolvedValue(row);
+      const canManageEvent = vi.fn();
+
+      const event = await (
+        await build({ findUnique }, { canManageEvent })
+      ).findOne('e1', user);
+
+      expect(canManageEvent).not.toHaveBeenCalled();
+      expect(event.canManage).toBe(false);
     });
   });
 
   describe('organizations on events', () => {
+    const openShift = {
+      requiredVolunteers: 2,
+      endsAt: new Date(Date.now() + 86_400_000),
+      _count: { assignments: 1 },
+    };
     const rows = [
       {
         id: 'e1',
@@ -208,9 +254,19 @@ describe('EventsService', () => {
       ]);
     });
 
+    it('also gives an organizer the status (organizers inherit volunteer rights)', async () => {
+      const findMany = vi.fn().mockResolvedValue(rows);
+      const volunteerStatuses = vi.fn().mockResolvedValue(new Map());
+
+      await (
+        await build({ findMany }, { volunteerStatuses })
+      ).findAll({}, { id: 'u1', role: Role.ORGANIZER });
+
+      expect(volunteerStatuses).toHaveBeenCalledWith('u1', ['e1', 'e2']);
+    });
+
     it.each([
       ['a participant', { id: 'u1', role: Role.PARTICIPANT }],
-      ['an organizer', { id: 'u1', role: Role.ORGANIZER }],
       ['a visitor', undefined],
     ])('does not compute any volunteer status for %s', async (_who, user) => {
       const findMany = vi.fn().mockResolvedValue(rows);
@@ -227,7 +283,9 @@ describe('EventsService', () => {
     });
 
     it('gives the volunteer status on the event detail too', async () => {
-      const findUnique = vi.fn().mockResolvedValue(rows[0]);
+      const findUnique = vi
+        .fn()
+        .mockResolvedValue({ ...rows[0], shifts: [openShift] });
       const volunteerStatuses = vi
         .fn()
         .mockResolvedValue(new Map([['e1', 'AVAILABLE']]));
@@ -249,9 +307,64 @@ describe('EventsService', () => {
   });
 
   describe('volunteer coverage and organization filter', () => {
-    const shift = (requiredVolunteers: number, assignments: number) => ({
+    const shift = (
+      requiredVolunteers: number,
+      assignments: number,
+      endsAt = new Date(Date.now() + 86_400_000),
+    ) => ({
       requiredVolunteers,
+      endsAt,
       _count: { assignments },
+    });
+
+    it.each([
+      ['an open shift', [shift(2, 1)], 'AVAILABLE'],
+      ['no shift', [], null],
+      ['only full shifts', [shift(2, 2)], null],
+      ['only past shifts', [shift(2, 0, new Date(Date.now() - 1000))], null],
+    ])(
+      'shows "can join" only with a shift to join: %s',
+      async (_c, shifts, expected) => {
+        const findMany = vi.fn().mockResolvedValue([
+          {
+            id: 'e1',
+            capacity: 10,
+            _count: { tickets: 0 },
+            organizations: [],
+            shifts,
+          },
+        ]);
+        const volunteerStatuses = vi
+          .fn()
+          .mockResolvedValue(new Map([['e1', 'AVAILABLE']]));
+
+        const [event] = await (
+          await build({ findMany }, { volunteerStatuses })
+        ).findAll({}, { id: 'u1', role: Role.VOLUNTEER });
+
+        expect(event.volunteerStatus).toBe(expected);
+      },
+    );
+
+    it('keeps "already on a shift" even when no shift is left to join', async () => {
+      const findMany = vi.fn().mockResolvedValue([
+        {
+          id: 'e1',
+          capacity: 10,
+          _count: { tickets: 0 },
+          organizations: [],
+          shifts: [shift(1, 1)],
+        },
+      ]);
+      const volunteerStatuses = vi
+        .fn()
+        .mockResolvedValue(new Map([['e1', 'ASSIGNED']]));
+
+      const [event] = await (
+        await build({ findMany }, { volunteerStatuses })
+      ).findAll({}, { id: 'u1', role: Role.VOLUNTEER });
+
+      expect(event.volunteerStatus).toBe('ASSIGNED');
     });
 
     it('sums what the shifts of an event still miss, without counting an overbooked shift negatively', async () => {

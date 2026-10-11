@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -45,6 +46,18 @@ export class TicketsController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.tickets.listForEvent(eventId, user.id, search);
+  }
+
+  /** Cancels the ticket of the user for this event. */
+  @Delete()
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.PARTICIPANT)
+  cancel(
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.tickets.cancel(eventId, user.id);
   }
 }
 

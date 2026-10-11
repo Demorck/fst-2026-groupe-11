@@ -5,7 +5,7 @@ import { Role } from '@/generated/prisma/enums.js';
 import { RolesGuard } from './roles.guard.js';
 
 class Restricted {
-  @Roles(Role.ORGANIZER, Role.VOLUNTEER)
+  @Roles(Role.VOLUNTEER)
   handler() {}
 }
 
@@ -30,7 +30,7 @@ describe('RolesGuard', () => {
     expect(guard.canActivate(contextFor(Open, Role.PARTICIPANT))).toBe(true);
   });
 
-  it('allows any of the listed roles', () => {
+  it('allows the listed role and the roles that inherit from it', () => {
     expect(guard.canActivate(contextFor(Restricted, Role.ORGANIZER))).toBe(
       true,
     );
@@ -39,7 +39,7 @@ describe('RolesGuard', () => {
     );
   });
 
-  it('throws 403 for a role that is not listed', () => {
+  it('throws 403 for a role below the listed one', () => {
     expect(() =>
       guard.canActivate(contextFor(Restricted, Role.PARTICIPANT)),
     ).toThrow(ForbiddenException);
