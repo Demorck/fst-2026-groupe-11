@@ -7,7 +7,6 @@ import CheckinList from '../features/tickets/components/CheckinList.tsx';
 interface Access {
   eventId: string;
   status: 'granted' | 'denied' | 'error';
-  message?: string;
 }
 
 /** Check-in of an event: for the organizers of its organizations only. */
@@ -30,11 +29,7 @@ export default function CheckinPage() {
         // An unknown or forbidden event is a refusal; a network or server failure is not
         const refused =
           err instanceof ApiError && (err.status === 403 || err.status === 404);
-        setAccess({
-          eventId,
-          status: refused ? 'denied' : 'error',
-          message: err.message,
-        });
+        setAccess({ eventId, status: refused ? 'denied' : 'error' });
       });
     return () => {
       stale = true;
@@ -49,7 +44,7 @@ export default function CheckinPage() {
     return (
       <div className="space-y-3">
         <p role="alert" className="alert-error">
-          Impossible de charger l'événement : {access.message}
+          Impossible de charger l'événement, réessayez plus tard.
         </p>
         <button
           type="button"
