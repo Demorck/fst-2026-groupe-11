@@ -25,3 +25,11 @@ export interface MyTicket extends Pick<
     location: string;
   };
 }
+
+/** A ticket of `GET /events/:eventId/tickets`, as the check-in page shows it. */
+export interface CheckinTicket extends Pick<
+  Ticket,
+  'id' | 'code' | 'status' | 'checkedInAt'
+> {
+  participant: { id: string; name: string; email: string };
+}

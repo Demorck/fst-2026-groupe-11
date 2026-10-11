@@ -1,17 +1,95 @@
 import {
+  BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { TicketStatus } from '../../generated/prisma/enums.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { OrganizationsService } from '../organizations/organizations.service.js';
 import { generateTicketCode } from './ticket-code.js';
 
 const MAX_CODE_ATTEMPTS = 3;
 
+/** What the check-in page shows of a ticket. */
+const checkinSelect = {
+  id: true,
+  code: true,
+  status: true,
+  checkedInAt: true,
+  participant: { select: { id: true, name: true, email: true } },
+} as const;
+
 @Injectable()
 export class TicketsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly organizations: OrganizationsService,
+  ) {}
+
+  /** Tickets of an event for its managers, filtered by participant name or ticket code. */
+  async listForEvent(eventId: string, userId: string, search?: string) {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { id: true },
+    });
+    if (!event) {
+      throw new NotFoundException('Event not found');
+    }
+    await this.assertManager(userId, eventId);
+    const term = search?.trim();
+    return this.prisma.ticket.findMany({
+      where: {
+        eventId,
+        ...(term && {
+          OR: [
+            { participant: { name: { contains: term, mode: 'insensitive' } } },
+            { code: { contains: term, mode: 'insensitive' } },
+          ],
+        }),
+      },
+      orderBy: { participant: { name: 'asc' } },
+      select: checkinSelect,
+    });
+  }
+
+  async checkIn(ticketId: string, userId: string) {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { eventId: true, status: true, checkedInAt: true },
+    });
+    if (!ticket) {
+      throw new NotFoundException('Ticket not found');
+    }
+    await this.assertManager(userId, ticket.eventId);
+    if (ticket.status === TicketStatus.CANCELLED) {
+      throw new BadRequestException('Ticket is cancelled');
+    }
+    try {
+      // The condition makes a concurrent check-in of the same ticket fail instead of overwriting it
+      return await this.prisma.ticket.update({
+        where: {
+          id: ticketId,
+          checkedInAt: null,
+          status: TicketStatus.RESERVED,
+        },
+        data: { checkedInAt: new Date() },
+        select: checkinSelect,
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code === 'P2025') {
+        throw new ConflictException('Already checked in');
+      }
+      throw error;
+    }
+  }
+
+  private async assertManager(userId: string, eventId: string) {
+    if (!(await this.organizations.canManageEvent(userId, eventId))) {
+      throw new ForbiddenException('Not a manager of this event');
+    }
+  }
 
   /** Active tickets of a user, ordered by event start. */
   listForUser(participantId: string) {
