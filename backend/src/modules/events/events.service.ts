@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Role, TicketStatus } from '@/generated/prisma/enums.js';
+import { hasRole } from '@/common/roles.js';
 import type { AuthUser } from '@/common/guards/jwt-auth.guard.js';
 import {
   OrganizationsService,
@@ -24,6 +25,7 @@ const include = {
   shifts: {
     select: {
       requiredVolunteers: true,
+      endsAt: true,
       _count: { select: { assignments: true } },
     },
   },
@@ -44,18 +46,37 @@ function volunteerCoverage(
   return { required, registered: required - missing, missing };
 }
 
+/** A volunteer can only join a shift that is still to come and not full. */
+function hasOpenShift(
+  shifts: {
+    requiredVolunteers: number;
+    endsAt: Date;
+    _count: { assignments: number };
+  }[],
+) {
+  const now = new Date();
+  return shifts.some(
+    (s) => s.endsAt > now && s._count.assignments < s.requiredVolunteers,
+  );
+}
+
 function present<
   T extends {
     id: string;
     capacity: number;
     _count: { tickets: number };
     organizations: { organization: { logoContentType: string | null } }[];
-    shifts: { requiredVolunteers: number; _count: { assignments: number } }[];
+    shifts: {
+      requiredVolunteers: number;
+      endsAt: Date;
+      _count: { assignments: number };
+    }[];
   },
 >(
   { _count, organizations, shifts, ...event }: T,
   statuses: Map<string, VolunteerStatus>,
 ) {
+  const status = statuses.get(event.id);
   return {
     ...event,
     remainingSeats: event.capacity - _count.tickets,
@@ -63,8 +84,10 @@ function present<
       toPublic(organization),
     ),
     volunteers: volunteerCoverage(shifts),
-    // Only for a logged in volunteer of one of the organizations, or already on a shift
-    volunteerStatus: statuses.get(event.id) ?? null,
+    // Only for a logged in volunteer of one of the organizations, or already on a shift.
+    // "Can join" needs a shift to join: without one the badge would promise nothing.
+    volunteerStatus:
+      status === 'AVAILABLE' && !hasOpenShift(shifts) ? null : (status ?? null),
   };
 }
 
@@ -131,12 +154,24 @@ export class EventsService {
       include,
     });
     if (!event) throw new NotFoundException('Event not found');
-    return present(event, await this.volunteerStatuses(user, [id]));
+    const canManage =
+      user?.role === Role.ORGANIZER &&
+      (await this.organizations.canManageEvent(user.id, id));
+    // Opens the shifts page: the API refuses it to who is in no organization of the event
+    const canVolunteer =
+      !!user &&
+      hasRole(user.role, Role.VOLUNTEER) &&
+      (await this.organizations.isVolunteerOfEvent(user.id, id));
+    return {
+      ...present(event, await this.volunteerStatuses(user, [id])),
+      canManage,
+      canVolunteer,
+    };
   }
 
-  // The badge only concerns volunteers: other roles and visitors skip the query
+  // The badge concerns volunteers and organizers: participants and visitors skip the query
   private volunteerStatuses(user: AuthUser | undefined, eventIds: string[]) {
-    return user?.role === Role.VOLUNTEER
+    return user && hasRole(user.role, Role.VOLUNTEER)
       ? this.organizations.volunteerStatuses(user.id, eventIds)
       : Promise.resolve(new Map<string, VolunteerStatus>());
   }

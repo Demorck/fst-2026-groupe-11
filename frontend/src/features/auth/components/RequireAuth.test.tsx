@@ -21,6 +21,10 @@ function renderAt(path: string) {
         element: <RequireAuth roles={['ORGANIZER']} />,
         children: [{ path: '/events/new', element: <p>Créer</p> }],
       },
+      {
+        element: <RequireAuth roles={['VOLUNTEER']} />,
+        children: [{ path: '/shifts', element: <p>Créneaux</p> }],
+      },
     ],
     { initialEntries: [path] },
   );
@@ -60,5 +64,21 @@ describe('RequireAuth', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('Créer')).not.toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/events/new');
+  });
+
+  it('names every role that gets in, since higher roles inherit the minimum', () => {
+    logInAs('PARTICIPANT');
+    renderAt('/shifts');
+
+    expect(
+      screen.getByText(/réservée au rôle Bénévole ou Organisateur/),
+    ).toBeInTheDocument();
+  });
+
+  it('lets an organizer into a volunteer page', () => {
+    logInAs('ORGANIZER');
+    renderAt('/shifts');
+
+    expect(screen.getByText('Créneaux')).toBeInTheDocument();
   });
 });

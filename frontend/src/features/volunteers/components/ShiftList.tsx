@@ -1,3 +1,4 @@
+import { useNow } from '../../../hooks/useNow.ts';
 import type { Shift } from '../types.ts';
 
 const formatDay = (iso: string) =>
@@ -7,9 +8,6 @@ const formatTime = (iso: string) =>
     hour: '2-digit',
     minute: '2-digit',
   });
-
-const actionClass =
-  'min-h-11 rounded-lg border border-gray-300 bg-white px-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600';
 
 interface ShiftListProps {
   shifts: Shift[];
@@ -31,14 +29,19 @@ export default function ShiftList({
   onLeave,
   busy,
 }: ShiftListProps) {
+  const now = useNow();
   if (shifts.length === 0) {
-    return <p>Aucun créneau pour cet événement.</p>;
+    return <p className="card text-muted">Aucun créneau pour cet événement.</p>;
   }
 
   return (
     <ul className="flex flex-col gap-3.5">
       {shifts.map((shift) => {
         const full = shift.registered >= shift.requiredVolunteers;
+        // Past shifts are history (hours, attestation): the API refuses a new sign-up
+        const ended = Date.parse(shift.endsAt) <= now;
+        // Once started, the hours count: the API refuses a sign-out
+        const started = Date.parse(shift.startsAt) <= now;
         const fill = Math.min(
           Math.round((shift.registered / shift.requiredVolunteers) * 100),
           100,
@@ -47,47 +50,51 @@ export default function ShiftList({
           <li
             key={shift.id}
             className={`flex flex-wrap items-center gap-x-6 gap-y-3.5 rounded-xl border bg-white px-5 py-4 ${
-              shift.assigned ? 'border-indigo-600' : 'border-gray-200'
+              shift.assigned ? 'border-brand' : 'border-line'
             }`}
           >
             <div className="w-30 shrink-0">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-muted">
                 {formatDay(shift.startsAt)}
               </div>
-              <div className="text-[22px] font-bold">
+              <div className="font-display text-[22px] font-bold">
                 {formatTime(shift.startsAt)}
               </div>
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-muted">
                 → {formatTime(shift.endsAt)}
               </div>
             </div>
             <div className="flex min-w-60 flex-[999_1_240px] flex-col gap-2">
               <h2 className="text-lg font-semibold">{shift.title}</h2>
               <div className="flex items-center gap-2.5">
-                <div className="h-1.5 w-36 overflow-hidden rounded-full bg-gray-200">
+                <div className="progress w-36">
                   <div
-                    className={`h-1.5 ${full ? 'bg-green-800' : 'bg-indigo-600'}`}
+                    className={`progress-bar ${full ? 'bg-ok-ink' : ''}`}
                     style={{ width: `${fill}%` }}
                   />
                 </div>
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-muted">
                   {shift.registered} / {shift.requiredVolunteers} bénévoles
                 </span>
               </div>
               {shift.assigned && (
-                <p className="text-sm font-medium text-indigo-700">
+                <p className="text-sm font-medium text-brand-deep">
                   Vous êtes inscrit
                 </p>
               )}
             </div>
             {onJoin && onLeave && (
               <div className="flex w-45 justify-end">
-                {shift.assigned ? (
+                {ended ? (
+                  <span className="badge">Terminé</span>
+                ) : shift.assigned && started ? (
+                  <span className="badge">En cours</span>
+                ) : shift.assigned ? (
                   <button
                     type="button"
                     onClick={() => onLeave(shift)}
                     disabled={busy}
-                    className={`${actionClass} disabled:opacity-60`}
+                    className="btn btn-secondary font-normal"
                   >
                     Se désinscrire
                   </button>
@@ -95,7 +102,7 @@ export default function ShiftList({
                   <button
                     type="button"
                     disabled
-                    className="min-h-11 rounded-lg bg-gray-200 px-4 font-semibold text-gray-600"
+                    className="btn bg-line-soft text-muted"
                   >
                     Complet
                   </button>
@@ -104,7 +111,7 @@ export default function ShiftList({
                     type="button"
                     onClick={() => onJoin(shift)}
                     disabled={busy}
-                    className="min-h-11 rounded-lg bg-indigo-600 px-4 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60"
+                    className="btn btn-primary"
                   >
                     S'inscrire
                   </button>
@@ -118,7 +125,7 @@ export default function ShiftList({
                     type="button"
                     onClick={() => onEdit(shift)}
                     aria-label={`Modifier ${shift.title}`}
-                    className={actionClass}
+                    className="btn btn-secondary font-normal"
                   >
                     Modifier
                   </button>
@@ -128,7 +135,7 @@ export default function ShiftList({
                     type="button"
                     onClick={() => onDelete(shift)}
                     aria-label={`Supprimer ${shift.title}`}
-                    className={`${actionClass} text-red-700`}
+                    className="btn btn-danger-outline font-normal"
                   >
                     Supprimer
                   </button>

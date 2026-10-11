@@ -121,10 +121,15 @@ export class TicketsService {
         return await this.prisma.$transaction(async (tx) => {
           // Lock the event row: concurrent bookings of one event run one at a time,
           // so the capacity check below cannot be overtaken.
-          const [event] = await tx.$queryRaw<{ capacity: number }[]>`
-            SELECT capacity FROM "Event" WHERE id = ${eventId} FOR UPDATE`;
+          const [event] = await tx.$queryRaw<
+            { capacity: number; startsAt: Date }[]
+          >`SELECT capacity, "startsAt" FROM "Event" WHERE id = ${eventId} FOR UPDATE`;
           if (!event) {
             throw new NotFoundException('Event not found');
+          }
+          // Same rule as cancel: a ticket taken after the start could never be given back
+          if (event.startsAt <= new Date()) {
+            throw new ConflictException('Event already started');
           }
 
           const existing = await tx.ticket.findUnique({
@@ -161,5 +166,47 @@ export class TicketsService {
         }
       }
     }
+  }
+
+  /** The participant gives their place back: the row stays as CANCELLED (and is reactivated by a new booking). */
+  cancel(eventId: string, participantId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      // Same lock as reserve: a cancellation and a booking of one event never overlap
+      const [event] = await tx.$queryRaw<{ startsAt: Date }[]>`
+        SELECT "startsAt" FROM "Event" WHERE id = ${eventId} FOR UPDATE`;
+      if (!event) {
+        throw new NotFoundException('Event not found');
+      }
+
+      const ticket = await tx.ticket.findUnique({
+        where: { eventId_participantId: { eventId, participantId } },
+      });
+      if (ticket?.status !== TicketStatus.RESERVED) {
+        throw new NotFoundException('Ticket not found');
+      }
+      if (ticket.checkedInAt) {
+        throw new ConflictException('Ticket already used');
+      }
+      if (event.startsAt <= new Date()) {
+        throw new ConflictException('Event already started');
+      }
+
+      try {
+        // The conditions make a check-in that commits in between win: the update then matches nothing
+        return await tx.ticket.update({
+          where: {
+            id: ticket.id,
+            status: TicketStatus.RESERVED,
+            checkedInAt: null,
+          },
+          data: { status: TicketStatus.CANCELLED },
+        });
+      } catch (error) {
+        if ((error as { code?: string }).code === 'P2025') {
+          throw new ConflictException('Ticket already used');
+        }
+        throw error;
+      }
+    });
   }
 }

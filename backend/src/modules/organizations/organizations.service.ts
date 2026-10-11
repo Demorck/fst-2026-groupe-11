@@ -268,7 +268,8 @@ export class OrganizationsService {
 
   /**
    * Volunteer hours of the organization: the length of their past shifts on its events. A manager
-   * sees every volunteer, a volunteer only themself. An event run by two organizations counts for both.
+   * sees every volunteer, a volunteer only themself. A manager who worked shifts is listed too.
+   * An event run by two organizations counts for both.
    */
   async listHours(organizationId: string, userId: string) {
     const me = await this.prisma.organizationMember.findUnique({
@@ -282,7 +283,6 @@ export class OrganizationsService {
     const members = await this.prisma.organizationMember.findMany({
       where: {
         organizationId,
-        role: OrganizationRole.VOLUNTEER,
         status: { in: WITH_HISTORY },
         ...(!manager && { userId }),
       },
@@ -303,23 +303,30 @@ export class OrganizationsService {
       },
     });
 
-    return members.map(({ userId: volunteerId, status, user }) => {
-      const done = assignments.filter((a) => a.volunteerId === volunteerId);
-      return {
-        userId: volunteerId,
-        name: user.name,
-        status,
-        shifts: done.length,
-        hours:
-          Math.round(
-            done.reduce(
-              (sum, { shift }) =>
-                sum + hoursBetween(shift.startsAt, shift.endsAt),
-              0,
-            ) * 100,
-          ) / 100,
-      };
-    });
+    // Managers are not volunteers by default: listed only once they have worked a shift
+    return members
+      .filter(
+        ({ role, userId: id }) =>
+          role === OrganizationRole.VOLUNTEER ||
+          assignments.some((a) => a.volunteerId === id),
+      )
+      .map(({ userId: volunteerId, status, user }) => {
+        const done = assignments.filter((a) => a.volunteerId === volunteerId);
+        return {
+          userId: volunteerId,
+          name: user.name,
+          status,
+          shifts: done.length,
+          hours:
+            Math.round(
+              done.reduce(
+                (sum, { shift }) =>
+                  sum + hoursBetween(shift.startsAt, shift.endsAt),
+                0,
+              ) * 100,
+            ) / 100,
+        };
+      });
   }
 
   /** Detail behind the hours of one volunteer, to print. A manager, or the volunteer themself. */
@@ -539,12 +546,12 @@ export class OrganizationsService {
     return count > 0;
   }
 
-  /** True when the user is a volunteer of at least one organization running the event. */
+  /** True when the user is a volunteer or a manager of at least one organization running the event. */
   async isVolunteerOfEvent(userId: string, eventId: string) {
     const count = await this.prisma.eventOrganization.count({
       where: {
         eventId,
-        organization: { members: { some: volunteerOf(userId) } },
+        organization: { members: { some: memberOf(userId) } },
       },
     });
     return count > 0;
@@ -566,7 +573,7 @@ export class OrganizationsService {
           {
             organizations: {
               some: {
-                organization: { members: { some: volunteerOf(userId) } },
+                organization: { members: { some: memberOf(userId) } },
               },
             },
           },
@@ -592,7 +599,8 @@ export class OrganizationsService {
 
   /**
    * A manager removes a volunteer from every shift of an event. Allowed only for a volunteer of an
-   * organization that the manager manages and that runs the event. Logged in that organization.
+   * organization that the manager manages and that runs the event, or for a co-manager when the
+   * actor is the creator (same hierarchy as removing a member). Logged in that organization.
    */
   async removeVolunteerParticipation(
     managerId: string,
@@ -609,9 +617,32 @@ export class OrganizationsService {
       where: {
         eventId,
         organization: {
-          AND: [
-            { members: { some: managerOf(managerId) } },
-            { members: { some: volunteerOf(volunteerId) } },
+          OR: [
+            {
+              AND: [
+                { members: { some: managerOf(managerId) } },
+                { members: { some: volunteerOf(volunteerId) } },
+              ],
+            },
+            {
+              AND: [
+                {
+                  members: {
+                    some: { ...managerOf(managerId), invitedById: null },
+                  },
+                },
+                {
+                  members: {
+                    some: {
+                      userId: volunteerId,
+                      role: OrganizationRole.MANAGER,
+                      status: MembershipStatus.ACCEPTED,
+                      invitedById: { not: null },
+                    },
+                  },
+                },
+              ],
+            },
           ],
         },
       },
@@ -702,7 +733,7 @@ export class OrganizationsService {
                 organizations: {
                   some: {
                     organization: {
-                      members: { some: volunteerOf(member.userId) },
+                      members: { some: memberOf(member.userId) },
                     },
                   },
                 },
@@ -772,6 +803,12 @@ export class OrganizationsService {
 const managerOf = (userId: string) => ({
   userId,
   role: OrganizationRole.MANAGER,
+  status: MembershipStatus.ACCEPTED,
+});
+
+// Managers work on their events too: the user role chain gives ORGANIZER the volunteer rights
+const memberOf = (userId: string) => ({
+  userId,
   status: MembershipStatus.ACCEPTED,
 });
 

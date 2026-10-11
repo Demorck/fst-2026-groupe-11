@@ -20,7 +20,7 @@ export default function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="max-w-sm space-y-4">
+    <form onSubmit={onSubmit} className="space-y-5">
       <TextField
         label="Email"
         type="email"
@@ -38,20 +38,20 @@ export default function LoginForm() {
         onChange={(e) => setPassword(e.target.value)}
       />
       {error && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="alert-error">
           {error}
         </p>
       )}
       <button
         type="submit"
         disabled={pending}
-        className="rounded bg-indigo-600 px-4 py-2 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60"
+        className="btn btn-primary w-full"
       >
         {pending ? 'Connexion...' : 'Se connecter'}
       </button>
-      <p className="text-sm">
+      <p className="text-center text-sm text-muted">
         Pas encore de compte ?{' '}
-        <Link to="/register" className="underline">
+        <Link to="/register" className="font-semibold">
           S'inscrire
         </Link>
       </p>

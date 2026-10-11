@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import ProgressBar from '../../../components/ProgressBar.tsx';
 import { getEventStats } from '../api.ts';
 import type { EventStats } from '../types.ts';
 
@@ -21,7 +22,7 @@ export default function StatsDetail({ eventId }: { eventId: string }) {
 
   if (error) {
     return (
-      <p role="alert" className="text-red-600">
+      <p role="alert" className="alert-error">
         {error}
       </p>
     );
@@ -31,21 +32,32 @@ export default function StatsDetail({ eventId }: { eventId: string }) {
     return <p>Aucun créneau bénévole pour cet événement.</p>;
   }
   return (
-    <ul className="space-y-1 text-sm">
-      {stats.shifts.map((shift) => (
-        <li key={shift.id}>
-          <strong>{shift.title}</strong> · {time(shift.startsAt)} :{' '}
-          <span
-            className={
-              shift.registered < shift.requiredVolunteers
-                ? 'font-medium text-amber-700'
-                : 'text-green-700'
-            }
+    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {stats.shifts.map((shift) => {
+        const missing = shift.registered < shift.requiredVolunteers;
+        return (
+          <li
+            key={shift.id}
+            className="space-y-2 rounded-lg border border-line bg-white p-3 text-sm"
           >
-            {shift.registered} / {shift.requiredVolunteers} bénévoles
-          </span>
-        </li>
-      ))}
+            <p>
+              <strong>{shift.title}</strong>
+              <span className="block text-muted">{time(shift.startsAt)}</span>
+            </p>
+            <ProgressBar
+              value={shift.registered}
+              max={shift.requiredVolunteers}
+              label={`Couverture de ${shift.title}`}
+              className={missing ? 'progress-warn' : ''}
+            />
+            <span
+              className={missing ? 'font-medium text-warn-ink' : 'text-ok-ink'}
+            >
+              {shift.registered} / {shift.requiredVolunteers} bénévoles
+            </span>
+          </li>
+        );
+      })}
     </ul>
   );
 }

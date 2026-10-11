@@ -38,7 +38,7 @@ export class VolunteersController {
   constructor(private readonly volunteers: VolunteersService) {}
 
   @Get('events/:eventId/shifts')
-  @Roles(Role.VOLUNTEER, Role.ORGANIZER)
+  @Roles(Role.VOLUNTEER)
   @ApiForbiddenResponse({
     description: 'Réservé aux bénévoles et organisateurs',
   })

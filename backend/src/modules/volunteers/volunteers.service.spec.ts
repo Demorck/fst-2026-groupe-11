@@ -243,14 +243,28 @@ describe('VolunteersService.listShifts', () => {
       (await build(setupList(null))).listShifts('e1', 'v1'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('refuses a volunteer of no organization of the event: 403', async () => {
+    const prisma = setupList();
+    const organizations = organizationsMock({
+      isVolunteerOfEvent: vi.fn().mockResolvedValue(false),
+    });
+
+    await expect(
+      (await build(prisma, organizations)).listShifts('e1', 'v1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.shift.findMany).not.toHaveBeenCalled();
+  });
 });
 
 describe('VolunteersService.assign', () => {
+  // Relative dates: assign() refuses a shift that has ended
+  const inOneDay = Date.now() + 86_400_000;
   const shiftRow = {
     eventId: 'e1',
     requiredVolunteers: 2,
-    startsAt: dto.startsAt,
-    endsAt: dto.endsAt,
+    startsAt: new Date(inOneDay),
+    endsAt: new Date(inOneDay + 2 * 3_600_000),
   };
 
   function setupAssign({
@@ -287,6 +301,24 @@ describe('VolunteersService.assign', () => {
     }).compile();
     return module.get(VolunteersService).assign('s1', 'v1');
   };
+
+  it('refuses a shift that has already ended, but not one in progress', async () => {
+    const ended = {
+      ...shiftRow,
+      startsAt: new Date(Date.now() - 3 * 3_600_000),
+      endsAt: new Date(Date.now() - 3_600_000),
+    };
+    const s = setupAssign({ shift: ended });
+    await expect(run(s)).rejects.toThrow('Shift already ended');
+    expect(s.tx.shiftAssignment.create).not.toHaveBeenCalled();
+
+    const running = {
+      ...shiftRow,
+      startsAt: new Date(Date.now() - 3_600_000),
+      endsAt: new Date(Date.now() + 3_600_000),
+    };
+    await run(setupAssign({ shift: running }));
+  });
 
   it('registers the volunteer', async () => {
     const s = setupAssign();
@@ -350,31 +382,52 @@ describe('VolunteersService.assign', () => {
 });
 
 describe('VolunteersService.unassign', () => {
-  async function run(count: number) {
-    const deleteMany = vi.fn().mockResolvedValue({ count });
+  async function run(assignment: { shift: { startsAt: Date } } | null) {
+    const findUnique = vi.fn().mockResolvedValue(assignment);
+    const deleteMany = vi.fn().mockResolvedValue({ count: 1 });
     const module = await Test.createTestingModule({
       providers: [
         VolunteersService,
         {
           provide: PrismaService,
-          useValue: { shiftAssignment: { deleteMany } },
+          useValue: { shiftAssignment: { findUnique, deleteMany } },
         },
         { provide: OrganizationsService, useValue: organizationsMock() },
       ],
     }).compile();
-    await module.get(VolunteersService).unassign('s1', 'v1');
-    return deleteMany;
+    const result = module.get(VolunteersService).unassign('s1', 'v1');
+    return { findUnique, deleteMany, result };
   }
 
-  it('removes only the own assignment', async () => {
-    const deleteMany = await run(1);
+  const upcoming = { shift: { startsAt: new Date(Date.now() + 3_600_000) } };
 
+  it('removes only the own assignment', async () => {
+    const { findUnique, deleteMany, result } = await run(upcoming);
+    await result;
+
+    expect(findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { shiftId_volunteerId: { shiftId: 's1', volunteerId: 'v1' } },
+      }),
+    );
     expect(deleteMany).toHaveBeenCalledWith({
       where: { shiftId: 's1', volunteerId: 'v1' },
     });
   });
 
   it('throws 404 when not registered', async () => {
-    await expect(run(0)).rejects.toBeInstanceOf(NotFoundException);
+    const { deleteMany, result } = await run(null);
+
+    await expect(result).rejects.toBeInstanceOf(NotFoundException);
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('keeps the hours of a shift that has started, even in progress: 409', async () => {
+    const { deleteMany, result } = await run({
+      shift: { startsAt: new Date(Date.now() - 1000) },
+    });
+
+    await expect(result).rejects.toThrow('Shift already started');
+    expect(deleteMany).not.toHaveBeenCalled();
   });
 });

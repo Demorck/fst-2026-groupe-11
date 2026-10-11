@@ -20,9 +20,10 @@ function setup({
   event = true,
   existing = null as { id: string; status: TicketStatus } | null,
   booked = 0,
+  startsAt = new Date(Date.now() + 86_400_000),
 } = {}) {
   const tx = {
-    $queryRaw: vi.fn().mockResolvedValue(event ? [{ capacity }] : []),
+    $queryRaw: vi.fn().mockResolvedValue(event ? [{ capacity, startsAt }] : []),
     ticket: {
       findUnique: vi.fn().mockResolvedValue(existing),
       count: vi.fn().mockResolvedValue(booked),
@@ -67,6 +68,15 @@ describe('TicketsService.reserve', () => {
     await expect(
       (await build(prisma)).reserve(eventId, participantId),
     ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.tx.ticket.create).not.toHaveBeenCalled();
+  });
+
+  it('throws 409 once the event has started', async () => {
+    const prisma = setup({ startsAt: new Date(Date.now() - 1000) });
+
+    await expect(
+      (await build(prisma)).reserve(eventId, participantId),
+    ).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.tx.ticket.create).not.toHaveBeenCalled();
   });
 
@@ -310,5 +320,101 @@ describe('TicketsService.checkIn', () => {
       ForbiddenException,
     );
     expect(prisma.ticket.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('TicketsService.cancel', () => {
+  const future = new Date(Date.now() + 86_400_000);
+
+  function setupCancel({
+    event = true,
+    startsAt = future,
+    ticket = { id: 't1', status: TicketStatus.RESERVED, checkedInAt: null } as {
+      id: string;
+      status: TicketStatus;
+      checkedInAt: Date | null;
+    } | null,
+    updateError = undefined as unknown,
+  } = {}) {
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue(event ? [{ startsAt }] : []),
+      ticket: {
+        findUnique: vi.fn().mockResolvedValue(ticket),
+        update: updateError
+          ? vi.fn().mockRejectedValue(updateError)
+          : vi.fn().mockResolvedValue({ id: 't1', status: 'CANCELLED' }),
+      },
+    };
+    const $transaction = vi.fn((callback: (tx: unknown) => unknown) =>
+      callback(tx),
+    );
+    return { tx, $transaction };
+  }
+
+  async function cancel(options?: Parameters<typeof setupCancel>[0]) {
+    const prisma = setupCancel(options);
+    const service = await build(prisma as unknown as ReturnType<typeof setup>);
+    return { prisma, result: service.cancel(eventId, participantId) };
+  }
+
+  it('marks the ticket of the user as cancelled', async () => {
+    const { prisma, result } = await cancel();
+
+    await expect(result).resolves.toMatchObject({ status: 'CANCELLED' });
+    expect(prisma.tx.ticket.findUnique.mock.calls[0][0].where).toEqual({
+      eventId_participantId: { eventId, participantId },
+    });
+    // The conditions let a concurrent check-in win instead of being overwritten
+    expect(prisma.tx.ticket.update).toHaveBeenCalledWith({
+      where: { id: 't1', status: TicketStatus.RESERVED, checkedInAt: null },
+      data: { status: TicketStatus.CANCELLED },
+    });
+  });
+
+  it('answers 409 when a check-in slipped in before the update', async () => {
+    const { result } = await cancel({ updateError: { code: 'P2025' } });
+
+    await expect(result).rejects.toThrow('Ticket already used');
+  });
+
+  it('throws 404 for an unknown event', async () => {
+    const { result } = await cancel({ event: false });
+
+    await expect(result).rejects.toThrow(NotFoundException);
+  });
+
+  it.each([
+    ['no ticket', null],
+    [
+      'an already cancelled ticket',
+      { id: 't1', status: TicketStatus.CANCELLED, checkedInAt: null },
+    ],
+  ])('throws 404 for %s', async (_, ticket) => {
+    const { prisma, result } = await cancel({ ticket });
+
+    await expect(result).rejects.toThrow('Ticket not found');
+    expect(prisma.tx.ticket.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses to cancel a ticket whose attendance is validated', async () => {
+    const { prisma, result } = await cancel({
+      ticket: {
+        id: 't1',
+        status: TicketStatus.RESERVED,
+        checkedInAt: new Date(),
+      },
+    });
+
+    await expect(result).rejects.toThrow(ConflictException);
+    expect(prisma.tx.ticket.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses to cancel once the event has started', async () => {
+    const { prisma, result } = await cancel({
+      startsAt: new Date(Date.now() - 1000),
+    });
+
+    await expect(result).rejects.toThrow('Event already started');
+    expect(prisma.tx.ticket.update).not.toHaveBeenCalled();
   });
 });

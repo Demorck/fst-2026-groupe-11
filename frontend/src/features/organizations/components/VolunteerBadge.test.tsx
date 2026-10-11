@@ -8,15 +8,15 @@ describe('VolunteerBadge', () => {
 
     expect(
       screen.getByText('Vous êtes bénévole sur cet événement'),
-    ).toHaveClass('bg-green-100');
+    ).toHaveClass('badge-ok');
   });
 
   it('is grey when the volunteer could join', () => {
     render(<VolunteerBadge status="AVAILABLE" />);
 
     expect(
-      screen.getByText('Vous pouvez bénévoler à cet événement'),
-    ).toHaveClass('bg-gray-100');
+      screen.getByText('Vous pouvez vous inscrire comme bénévole'),
+    ).not.toHaveClass('badge-ok');
   });
 
   it.each([undefined, null])('renders nothing for %s', (status) => {

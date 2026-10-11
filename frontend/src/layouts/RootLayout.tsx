@@ -1,12 +1,30 @@
-import { NavLink, Outlet, useNavigate } from 'react-router';
+import { Link, NavLink, Outlet, useNavigate } from 'react-router';
+import BrandMark from '../components/BrandMark.tsx';
+import DialogHost from '../components/DialogHost.tsx';
+import { hasRole, ROLE_LABELS } from '../features/auth/types.ts';
 import { clearSession, useSession } from '../features/auth/session.ts';
 import { usePendingInvitations } from '../features/organizations/pendingInvitations.ts';
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0].toUpperCase())
+    .join('');
+
+// min-h-11: touch target; the active page gets the 2px brand underline of the mockup
+const navClass = ({ isActive }: { isActive: boolean }) =>
+  `flex min-h-11 items-center border-b-2 ${
+    isActive
+      ? 'border-brand font-semibold text-brand'
+      : 'border-transparent text-ink hover:text-brand'
+  }`;
 
 export default function RootLayout() {
   const session = useSession();
   const navigate = useNavigate();
-  const inOrganizations =
-    session?.user.role === 'ORGANIZER' || session?.user.role === 'VOLUNTEER';
+  const inOrganizations = hasRole(session?.user.role, 'VOLUNTEER');
   const pendingInvitations = usePendingInvitations(inOrganizations);
 
   async function logout() {
@@ -15,54 +33,94 @@ export default function RootLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <header className="border-b bg-white">
-        <nav className="mx-auto flex max-w-5xl gap-6 px-4 py-3">
-          <NavLink to="/" className="font-semibold">
+    <div className="flex min-h-screen flex-col">
+      <header className="sticky top-0 z-30 border-b border-line bg-white print:hidden">
+        {/* Two rows below xl (brand and account, then the links), one row from xl on */}
+        <nav className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-x-6 px-4 sm:px-6">
+          <Link
+            to="/"
+            className="flex items-center gap-2 py-2 font-display text-xl font-bold text-ink hover:text-ink"
+          >
+            <BrandMark className="size-6 text-brand" />
             G-Event
-          </NavLink>
-          <NavLink to="/" end>
-            Événements
-          </NavLink>
-          {session?.user.role === 'ORGANIZER' && (
-            <>
-              <NavLink to="/events/new">Créer un événement</NavLink>
-              <NavLink to="/dashboard">Dashboard</NavLink>
-            </>
-          )}
-          {session && <NavLink to="/me/tickets">Mes billets</NavLink>}
-          {inOrganizations && (
-            <NavLink to="/organizations">
-              Mes organisations
-              {pendingInvitations > 0 && (
-                <span
-                  aria-label={`${pendingInvitations} invitation(s) en attente`}
-                  className="ml-1.5 rounded-full bg-indigo-600 px-1.5 py-0.5 text-xs font-semibold text-white"
-                >
-                  {pendingInvitations}
-                </span>
-              )}
+          </Link>
+          <div className="order-last -mx-4 flex w-[calc(100%+2rem)] gap-5 overflow-x-auto px-4 whitespace-nowrap sm:-mx-6 sm:w-[calc(100%+3rem)] sm:px-6 xl:order-none xl:mx-0 xl:w-auto xl:overflow-visible xl:px-0">
+            <NavLink to="/" end className={navClass}>
+              Événements
             </NavLink>
-          )}
-          {session ? (
-            <>
-              <NavLink to="/profile" className="ml-auto">
-                {session.user.name}
+            {session?.user.role === 'ORGANIZER' && (
+              <>
+                <NavLink to="/events/new" className={navClass}>
+                  Créer un événement
+                </NavLink>
+                <NavLink to="/dashboard" className={navClass}>
+                  Dashboard
+                </NavLink>
+              </>
+            )}
+            {session && (
+              <NavLink to="/me/tickets" className={navClass}>
+                Mes billets
               </NavLink>
-              <button type="button" onClick={logout}>
-                Déconnexion
-              </button>
-            </>
-          ) : (
-            <NavLink to="/login" className="ml-auto">
-              Connexion
-            </NavLink>
-          )}
+            )}
+            {inOrganizations && (
+              <NavLink to="/organizations" className={navClass}>
+                Mes organisations
+                {pendingInvitations > 0 && (
+                  <span
+                    aria-label={`${pendingInvitations} invitation(s) en attente`}
+                    className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-brand px-1.5 py-0.5 text-center text-xs font-semibold text-white"
+                  >
+                    {pendingInvitations}
+                  </span>
+                )}
+              </NavLink>
+            )}
+          </div>
+          <div className="ml-auto flex items-center gap-3 py-2 text-sm">
+            {session ? (
+              <>
+                <span
+                  aria-hidden="true"
+                  className="flex size-8 items-center justify-center rounded-full bg-brand-tint font-semibold text-brand-deep"
+                >
+                  {initials(session.user.name)}
+                </span>
+                <NavLink
+                  to="/profile"
+                  title={ROLE_LABELS[session.user.role]}
+                  className="font-medium text-ink hover:text-brand"
+                >
+                  {session.user.name}
+                </NavLink>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="btn btn-secondary btn-sm"
+                >
+                  Déconnexion
+                </button>
+              </>
+            ) : (
+              <NavLink to="/login" className="btn btn-primary btn-sm">
+                Connexion
+              </NavLink>
+            )}
+          </div>
         </nav>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-6">
+      <main className="mx-auto w-full max-w-[1240px] flex-1 px-4 pt-6 pb-16 sm:px-6 sm:pt-8 print:max-w-none print:p-0">
         <Outlet />
       </main>
+      <footer className="border-t border-line bg-white print:hidden">
+        <div className="mx-auto flex max-w-[1240px] items-center px-4 py-5 text-sm text-muted sm:px-6">
+          <p className="flex items-center gap-2">
+            <BrandMark className="size-5 text-muted" />
+            G-Event, les événements des associations étudiantes
+          </p>
+        </div>
+      </footer>
+      <DialogHost />
     </div>
   );
 }

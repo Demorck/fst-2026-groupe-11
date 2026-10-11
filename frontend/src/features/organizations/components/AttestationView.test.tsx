@@ -45,7 +45,9 @@ describe('AttestationView', () => {
     expect(
       await screen.findByRole('heading', { name: 'Attestation de bénévolat' }),
     ).toBeInTheDocument();
-    expect(screen.getByText('BDE Nancy')).toBeInTheDocument();
+    // in the letterhead and in the sentence
+    expect(screen.getAllByText('BDE Nancy')).toHaveLength(2);
+    expect(screen.getByText("Pour l'organisation")).toBeInTheDocument();
     expect(screen.getByText('Bastien Bénévole')).toBeInTheDocument();
     expect(screen.getByText('3.5 heure(s)')).toBeInTheDocument();
     expect(screen.getByText('Accueil')).toBeInTheDocument();

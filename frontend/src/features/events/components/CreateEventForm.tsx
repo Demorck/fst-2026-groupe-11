@@ -6,11 +6,10 @@ import { useSubmit } from '../../auth/hooks/useSubmit.ts';
 import { getMyOrganizations } from '../../organizations/api.ts';
 import type { MyOrganization } from '../../organizations/types.ts';
 import { createEvent } from '../api.ts';
-import { CATEGORY_LABELS, EVENT_CATEGORIES } from '../types.ts';
+import DateTimeField from '../../../components/DateTimeField.tsx';
+import CategoryChips from './CategoryChips.tsx';
+import EventPreview from './EventPreview.tsx';
 import type { EventCategory } from '../types.ts';
-
-const fieldClass =
-  'block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 focus-visible:outline-2 focus-visible:outline-indigo-600';
 
 export default function CreateEventForm() {
   const navigate = useNavigate();
@@ -30,6 +29,9 @@ export default function CreateEventForm() {
     // datetime-local has no timezone, Date reads it as local time
     const start = new Date(startsAt);
     const end = new Date(endsAt);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new Error('Saisissez des dates valides.');
+    }
     if (end <= start) {
       throw new Error('La fin doit être après le début.');
     }
@@ -73,15 +75,15 @@ export default function CreateEventForm() {
 
   if (loadError) {
     return (
-      <p role="alert" className="text-red-600">
+      <p role="alert" className="alert-error">
         {loadError}
       </p>
     );
   }
-  if (!managed) return <p>Chargement...</p>;
+  if (!managed) return <p className="text-muted">Chargement...</p>;
   if (managed.length === 0) {
     return (
-      <div className="min-w-0 flex-[999_1_520px] space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-7">
+      <div className="alert-note max-w-2xl space-y-3 p-7 text-base">
         <p className="font-semibold">
           Vous ne gérez aucune organisation pour l'instant.
         </p>
@@ -90,10 +92,7 @@ export default function CreateEventForm() {
           créez la vôtre, ou acceptez l'invitation d'un autre gestionnaire,
           avant de créer un événement.
         </p>
-        <Link
-          to="/organizations"
-          className="inline-block rounded-[10px] bg-indigo-600 px-4 py-2 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-        >
+        <Link to="/organizations" className="btn btn-primary">
           Gérer mes organisations
         </Link>
       </div>
@@ -101,116 +100,142 @@ export default function CreateEventForm() {
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="min-w-0 flex-[999_1_520px] space-y-5 rounded-xl border border-gray-200 bg-white p-7"
-    >
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">
-          Organisations qui participent
-        </legend>
-        {managed.map(({ id, name }) => (
-          <label key={id} className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={selected.includes(id)}
-              onChange={() => toggle(id)}
-              className="size-4 accent-indigo-600"
+    <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <form onSubmit={onSubmit} className="card space-y-8 p-6 sm:p-7">
+        <section className="space-y-5">
+          <h2 className="text-lg font-semibold">L'essentiel</h2>
+          <TextField
+            label="Titre"
+            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <label className="field-label">
+            <span>Description</span>
+            <textarea
+              required
+              rows={4}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="field"
             />
-            {name}
           </label>
-        ))}
-      </fieldset>
-      <TextField
-        label="Titre"
-        required
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-      />
-      <label className="block space-y-1">
-        <span className="text-sm font-medium">Description</span>
-        <textarea
-          required
-          rows={5}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className={fieldClass}
-        />
-      </label>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
-          label="Début"
-          type="datetime-local"
-          required
-          value={startsAt}
-          onChange={(e) => setStartsAt(e.target.value)}
-        />
-        <TextField
-          label="Fin"
-          type="datetime-local"
-          required
-          min={startsAt || undefined}
-          value={endsAt}
-          onChange={(e) => setEndsAt(e.target.value)}
-        />
-      </div>
-      <TextField
-        label="Lieu"
-        required
-        value={location}
-        onChange={(e) => setLocation(e.target.value)}
-      />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
-          label="Capacité"
-          type="number"
-          required
-          min={1}
-          step={1}
-          value={capacity}
-          onChange={(e) => setCapacity(e.target.value)}
-        />
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">Catégorie</span>
-          <select
+          <CategoryChips
+            name="category"
+            legend="Catégorie"
             value={category}
-            onChange={(e) => setCategory(e.target.value as EventCategory)}
-            className={fieldClass}
+            onChange={(c) => c && setCategory(c)}
+          />
+        </section>
+
+        <section className="space-y-5 border-t border-line-soft pt-6">
+          <h2 className="text-lg font-semibold">Date et lieu</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <DateTimeField
+              label="Début"
+              required
+              value={startsAt}
+              onChange={setStartsAt}
+            />
+            <DateTimeField
+              label="Fin"
+              required
+              min={startsAt || undefined}
+              value={endsAt}
+              onChange={setEndsAt}
+            />
+          </div>
+          <TextField
+            label="Lieu"
+            required
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+          />
+        </section>
+
+        <section className="space-y-5 border-t border-line-soft pt-6">
+          <h2 className="text-lg font-semibold">Public et organisation</h2>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div className="relative">
+              <TextField
+                label="Capacité"
+                type="number"
+                required
+                min={1}
+                step={1}
+                value={capacity}
+                onChange={(e) => setCapacity(e.target.value)}
+              />
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute right-10 bottom-2.5 text-sm text-muted"
+              >
+                places
+              </span>
+            </div>
+            <TextField
+              label="Image (URL, facultatif)"
+              type="url"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+            />
+          </div>
+          <fieldset className="space-y-2">
+            <legend className="mb-1 text-sm font-medium">
+              Organisations qui participent
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {managed.map(({ id, name }) => (
+                <label key={id} className="chip">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(id)}
+                    onChange={() => toggle(id)}
+                    className="sr-only"
+                  />
+                  {name}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </section>
+
+        {error && (
+          <p role="alert" className="alert-error">
+            {error}
+          </p>
+        )}
+        <div className="flex flex-col gap-3 border-t border-line-soft pt-6 sm:flex-row">
+          <button
+            type="submit"
+            disabled={pending}
+            className="btn btn-primary min-h-12 px-5"
           >
-            {EVENT_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {CATEGORY_LABELS[c]}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <TextField
-        label="Image (URL, facultatif)"
-        type="url"
-        value={imageUrl}
-        onChange={(e) => setImageUrl(e.target.value)}
-      />
-      {error && (
-        <p role="alert" className="text-red-600">
-          {error}
+            {pending ? 'Création...' : "Créer l'événement"}
+          </button>
+          <Link
+            to="/events"
+            className="btn btn-secondary min-h-12 px-5 font-normal"
+          >
+            Annuler
+          </Link>
+        </div>
+      </form>
+
+      <aside className="space-y-4 lg:sticky lg:top-24">
+        <p className="text-sm font-medium">Aperçu dans la liste</p>
+        <EventPreview
+          title={title}
+          category={category}
+          startsAt={startsAt}
+          location={location}
+          capacity={Number(capacity)}
+        />
+        <p className="alert-note">
+          Les créneaux bénévoles se configurent après la création, depuis le
+          dashboard.
         </p>
-      )}
-      <div className="flex flex-wrap gap-3 pt-1">
-        <button
-          type="submit"
-          disabled={pending}
-          className="min-h-12 rounded-[10px] bg-indigo-600 px-5 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60"
-        >
-          {pending ? 'Création...' : "Créer l'événement"}
-        </button>
-        <Link
-          to="/events"
-          className="inline-flex min-h-12 items-center rounded-[10px] border border-gray-300 px-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-        >
-          Annuler
-        </Link>
-      </div>
-    </form>
+      </aside>
+    </div>
   );
 }

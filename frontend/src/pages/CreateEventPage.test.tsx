@@ -50,7 +50,7 @@ async function fillForm(startsAt: string, endsAt: string) {
   fireEvent.change(screen.getByLabelText('Fin'), { target: { value: endsAt } });
   await userEvent.type(screen.getByLabelText('Lieu'), 'Nancy');
   await userEvent.type(screen.getByLabelText('Capacité'), '50');
-  await userEvent.selectOptions(screen.getByLabelText('Catégorie'), 'PARTY');
+  await userEvent.click(screen.getByRole('radio', { name: 'Soirée' }));
 }
 
 const submit = () =>

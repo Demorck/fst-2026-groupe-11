@@ -4,7 +4,13 @@ import QRCode from 'qrcode';
 const QUIET_ZONE = 4;
 
 /** QR code of a ticket code, drawn as SVG from the module matrix (display only, no camera scan). */
-export default function TicketQrCode({ code }: { code: string }) {
+export default function TicketQrCode({
+  code,
+  className = 'h-40 w-40',
+}: {
+  code: string;
+  className?: string;
+}) {
   const { size, data } = QRCode.create(code).modules;
   const cells = Array.from(data, (dark, i) =>
     dark
@@ -19,7 +25,7 @@ export default function TicketQrCode({ code }: { code: string }) {
       role="img"
       aria-label={`QR code du billet ${code}`}
       shapeRendering="crispEdges"
-      className="h-40 w-40 rounded border bg-white"
+      className={`rounded border border-line bg-white ${className}`}
     >
       <path d={cells.join('')} fill="#000" />
     </svg>

@@ -87,16 +87,23 @@ describe('RootLayout header', () => {
     },
   );
 
-  it.each(['PARTICIPANT', 'VOLUNTEER', 'ORGANIZER'])(
-    'shows the tickets link to a %s',
+  it('shows the tickets link to a participant', () => {
+    logIn('PARTICIPANT');
+    renderLayout();
+
+    expect(screen.getByRole('link', { name: 'Mes billets' })).toHaveAttribute(
+      'href',
+      '/me/tickets',
+    );
+  });
+
+  it.each(['VOLUNTEER', 'ORGANIZER'])(
+    'shows the tickets link to a %s, who inherits the participant rights',
     (role) => {
       logIn(role);
       renderLayout();
 
-      expect(screen.getByRole('link', { name: 'Mes billets' })).toHaveAttribute(
-        'href',
-        '/me/tickets',
-      );
+      expect(screen.getByRole('link', { name: 'Mes billets' })).toBeVisible();
     },
   );
 

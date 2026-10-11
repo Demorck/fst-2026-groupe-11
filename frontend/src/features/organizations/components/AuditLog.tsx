@@ -36,24 +36,26 @@ export default function AuditLog({
 
   return (
     <section aria-labelledby="audit" className="space-y-3">
-      <h2 id="audit" className="text-xl font-semibold">
+      <h2 id="audit" className="text-lg font-semibold">
         Journal
       </h2>
       {error && (
-        <p role="alert" className="text-red-600">
+        <p role="alert" className="alert-error">
           {error}
         </p>
       )}
-      {entries?.length === 0 && <p>Rien à signaler.</p>}
-      <ul className="space-y-1 text-sm">
+      {entries?.length === 0 && (
+        <p className="card text-sm text-muted">Rien à signaler.</p>
+      )}
+      <ul className="card max-h-80 space-y-2 overflow-y-auto p-4 text-sm empty:hidden">
         {entries?.map((entry) => (
           <li key={entry.id}>
-            <time dateTime={entry.createdAt} className="mr-2 text-gray-500">
+            <time dateTime={entry.createdAt} className="mr-2 text-muted">
               {new Date(entry.createdAt).toLocaleDateString('fr-FR')}
             </time>
             {describe(entry)}
             {!!entry.details?.removedShifts && (
-              <span className="text-gray-600">
+              <span className="text-muted">
                 {' '}
                 ({entry.details.removedShifts} créneau(x) à venir retiré(s))
               </span>

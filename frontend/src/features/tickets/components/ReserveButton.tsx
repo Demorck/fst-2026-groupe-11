@@ -1,96 +1,175 @@
 import { useState } from 'react';
+import { useNow } from '../../../hooks/useNow.ts';
 import { Link } from 'react-router';
-import { useSubmit } from '../../auth/hooks/useSubmit.ts';
+import { alertDialog, confirm, toast } from '../../../components/dialogs.ts';
+import Modal from '../../../components/Modal.tsx';
 import { useAuth } from '../../auth/useAuth.ts';
-import { reserveTicket } from '../api.ts';
-import type { Ticket } from '../types.ts';
+import { TICKET_ERRORS } from '../messages.ts';
+import { bookTicket, cancelTicket, useMyTickets } from '../store.ts';
 import TicketQrCode from './TicketQrCode.tsx';
 
-// The API answers in English, the interface speaks French
-const ERROR_MESSAGES: Record<string, string> = {
-  'Event is full': 'Cet événement est complet.',
-  'Ticket already booked':
-    'Vous avez déjà réservé une place pour cet événement.',
-};
-
-const buttonClass =
-  'rounded px-4 py-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-60';
-
-/** Ticket booking for the event detail page, with a confirmation step before the API call. */
-export default function ReserveButton({ eventId }: { eventId: string }) {
+/**
+ * Booking and cancelling for the event detail page. The ticket held comes from the shared store,
+ * so the button, the code and the seats follow every change made anywhere on the site.
+ */
+export default function ReserveButton({
+  eventId,
+  startsAt,
+  full,
+}: {
+  eventId: string;
+  startsAt: string;
+  full: boolean;
+}) {
   const { user } = useAuth();
-  const [confirming, setConfirming] = useState(false);
-  const [ticket, setTicket] = useState<Ticket | null>(null);
-  const { submit, pending, error } = useSubmit(async () => {
+  const { tickets, error } = useMyTickets(!!user);
+  // The modal that shows the new ticket, until it is closed
+  const [shown, setShown] = useState<{ code: string } | null>(null);
+  const [pending, setPending] = useState(false);
+  const now = useNow();
+  // The API refuses both booking and cancelling once the event has started
+  const started = Date.parse(startsAt) <= now;
+
+  async function reserve() {
+    const confirmed = await confirm({
+      title: 'Réserver une place pour cet événement ?',
+      message: 'La place est gratuite, avec un seul billet par compte.',
+      tone: 'primary',
+    });
+    if (!confirmed) return;
+    setPending(true);
     try {
-      setTicket(await reserveTicket(eventId));
+      setShown(await bookTicket(eventId));
+    } catch (err) {
+      const message = (err as Error).message;
+      void alertDialog({
+        title: 'Réservation impossible',
+        message: TICKET_ERRORS[message] ?? message,
+      });
     } finally {
-      setConfirming(false);
+      setPending(false);
     }
-  });
+  }
+
+  async function cancel() {
+    const confirmed = await confirm({
+      title: 'Annuler votre réservation ?',
+      message: 'Votre place sera libérée et votre code ne sera plus valable.',
+      confirmLabel: 'Annuler la réservation',
+    });
+    if (!confirmed) return;
+    setPending(true);
+    try {
+      await cancelTicket(eventId);
+      toast('Réservation annulée.');
+    } catch (err) {
+      const message = (err as Error).message;
+      void alertDialog({
+        title: 'Annulation impossible',
+        message: TICKET_ERRORS[message] ?? message,
+      });
+    } finally {
+      setPending(false);
+    }
+  }
 
   if (!user) {
     return (
-      <Link to="/login" className="underline">
+      <Link to="/login" className="btn btn-primary w-full">
         Connectez-vous pour réserver
       </Link>
     );
   }
-  // organizers and volunteers have no ticket: the API refuses them
-  if (user.role !== 'PARTICIPANT') return null;
-
-  if (ticket) {
+  const held = tickets?.find(({ event }) => event.id === eventId);
+  if (held) {
     return (
-      <div className="space-y-3">
-        <p role="status" className="text-green-700">
-          Votre place est réservée. Votre code : <strong>{ticket.code}</strong>
-        </p>
-        <TicketQrCode code={ticket.code} />
-        <Link to="/me/tickets" className="underline">
-          Voir mes billets
-        </Link>
-      </div>
+      <>
+        {shown && (
+          <Modal title="Place réservée !" onClose={() => setShown(null)}>
+            <p className="mt-1 text-muted">
+              Présentez ce code à l'entrée de l'événement.
+            </p>
+            <div className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-dashed border-brand-edge bg-brand-tint/50 p-4">
+              <div className="min-w-0">
+                <p className="text-[13px] text-muted">Code du billet</p>
+                <p className="font-mono text-xl font-semibold tracking-wide break-all">
+                  {held.code}
+                </p>
+              </div>
+              <TicketQrCode code={held.code} className="size-24 shrink-0" />
+            </div>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                data-autofocus
+                className="btn btn-secondary"
+                onClick={() => setShown(null)}
+              >
+                Fermer
+              </button>
+              <Link to="/me/tickets" className="btn btn-primary">
+                Voir mes billets
+              </Link>
+            </div>
+          </Modal>
+        )}
+        {!shown && (
+          <div className="space-y-3">
+            <p
+              role="status"
+              className="rounded-[10px] bg-ok-bg p-4 text-ok-ink"
+            >
+              Votre place est réservée. Votre code :{' '}
+              <strong className="font-mono text-xl tracking-wide">
+                {held.code}
+              </strong>
+            </p>
+            <TicketQrCode code={held.code} />
+            <Link to="/me/tickets" className="btn btn-secondary w-full">
+              Voir mes billets
+            </Link>
+            {!started && (
+              <button
+                type="button"
+                onClick={() => void cancel()}
+                disabled={pending}
+                className="btn btn-danger-outline w-full"
+              >
+                Annuler ma réservation
+              </button>
+            )}
+          </div>
+        )}
+      </>
+    );
+  }
+
+  if (started) {
+    return (
+      <p className="text-sm text-muted">
+        Les réservations sont fermées : l'événement a commencé.
+      </p>
+    );
+  }
+
+  // The API refuses it anyway: do not offer a booking that cannot succeed
+  if (full) {
+    return (
+      <p className="text-sm text-muted">
+        L'événement est complet : plus aucune place à réserver.
+      </p>
     );
   }
 
   return (
-    <div className="space-y-2">
-      {error && (
-        <p role="alert" className="text-red-600">
-          {ERROR_MESSAGES[error] ?? error}
-        </p>
-      )}
-      {confirming ? (
-        <div className="space-y-2">
-          <p>Confirmer la réservation d'une place ?</p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void submit()}
-              disabled={pending}
-              className={`${buttonClass} bg-indigo-600 text-white`}
-            >
-              {pending ? 'Réservation...' : 'Confirmer'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              disabled={pending}
-              className={`${buttonClass} border border-gray-300 bg-white`}
-            >
-              Annuler
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setConfirming(true)}
-          className={`${buttonClass} bg-indigo-600 text-white`}
-        >
-          Réserver
-        </button>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={() => void reserve()}
+      // booking waits for the list of tickets already held; if it cannot be read, the API still refuses a duplicate
+      disabled={(tickets === null && error === null) || pending}
+      className="btn btn-primary w-full"
+    >
+      {pending ? 'Réservation...' : 'Réserver'}
+    </button>
   );
 }

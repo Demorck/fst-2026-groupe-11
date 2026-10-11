@@ -8,8 +8,8 @@ const rolesOf = (handler: () => unknown) =>
   new Reflector().get<Role[]>(ROLES_KEY, handler);
 
 describe('VolunteersController roles', () => {
-  it('lets volunteers and organizers list the shifts, not participants', () => {
-    expect(rolesOf(proto.list)).toEqual([Role.VOLUNTEER, Role.ORGANIZER]);
+  it('lets volunteers list the shifts (organizers inherit), not participants', () => {
+    expect(rolesOf(proto.list)).toEqual([Role.VOLUNTEER]);
   });
 
   it.each(['assign', 'unassign'] as const)(

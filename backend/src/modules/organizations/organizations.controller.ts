@@ -45,7 +45,7 @@ import { readBody } from './read-body.js';
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({ description: 'Non connecté' })
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ORGANIZER, Role.VOLUNTEER)
+@Roles(Role.VOLUNTEER)
 @ApiForbiddenResponse({ description: 'Réservé aux organisateurs et bénévoles' })
 @Controller('organizations')
 export class OrganizationsController {

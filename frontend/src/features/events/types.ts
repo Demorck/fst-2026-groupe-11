@@ -22,6 +22,19 @@ export const CATEGORY_LABELS: Record<EventCategory, string> = {
   OTHER: 'Autre',
 };
 
+/** Banner tint and ink of each category, as in the mockup. */
+export const CATEGORY_STYLES: Record<
+  EventCategory,
+  { tint: string; ink: string }
+> = {
+  CONFERENCE: { tint: '#E4E6FB', ink: '#2A2DA8' },
+  PARTY: { tint: '#FDE5D8', ink: '#9A3412' },
+  SPORT: { tint: '#DDF3E6', ink: '#166534' },
+  CULTURE: { tint: '#F3E3F7', ink: '#6B21A8' },
+  WORKSHOP: { tint: '#FFF1C7', ink: '#854D0E' },
+  OTHER: { tint: '#ECEDF1', ink: '#3F4350' },
+};
+
 /** Mirrors the backend CreateEventDto, dates as ISO strings. */
 export interface CreateEventInput {
   title: string;
@@ -58,8 +71,27 @@ export interface EventWithSeats extends EventDetail {
   volunteerStatus: VolunteerStatus | null;
 }
 
+/** GET /events/:id also says whether the viewer manages the event (organizer of one of its organizations). */
+export interface EventWithAccess extends EventWithSeats {
+  canManage: boolean;
+  /** Member of an organization of the event: may open its shifts. */
+  canVolunteer: boolean;
+}
+
 export const formatEventDate = (iso: string) =>
   new Date(iso).toLocaleString('fr-FR', {
     dateStyle: 'full',
     timeStyle: 'short',
   });
+
+export const formatShortDay = (iso: string) =>
+  new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+
+/** "Aujourd'hui", "Demain", "Dans 5 jours"; null for a past day or one further than `maxDays` (two weeks by default). */
+export function proximity(iso: string, now: number, maxDays = 14) {
+  const day = (time: number) => new Date(time).setHours(0, 0, 0, 0);
+  const days = Math.round((day(Date.parse(iso)) - day(now)) / 86_400_000);
+  if (days < 0 || days > maxDays) return null;
+  if (days === 0) return "Aujourd'hui";
+  return days === 1 ? 'Demain' : `Dans ${days} jours`;
+}
