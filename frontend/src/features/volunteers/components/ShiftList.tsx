@@ -40,6 +40,8 @@ export default function ShiftList({
         const full = shift.registered >= shift.requiredVolunteers;
         // Past shifts are history (hours, attestation): the API refuses a new sign-up
         const ended = Date.parse(shift.endsAt) <= now;
+        // Once started, the hours count: the API refuses a sign-out
+        const started = Date.parse(shift.startsAt) <= now;
         const fill = Math.min(
           Math.round((shift.registered / shift.requiredVolunteers) * 100),
           100,
@@ -85,6 +87,8 @@ export default function ShiftList({
               <div className="flex w-45 justify-end">
                 {ended ? (
                   <span className="badge">Terminé</span>
+                ) : shift.assigned && started ? (
+                  <span className="badge">En cours</span>
                 ) : shift.assigned ? (
                   <button
                     type="button"

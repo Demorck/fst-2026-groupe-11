@@ -370,7 +370,7 @@ describe('VolunteersService.assign', () => {
 });
 
 describe('VolunteersService.unassign', () => {
-  async function run(assignment: { shift: { endsAt: Date } } | null) {
+  async function run(assignment: { shift: { startsAt: Date } } | null) {
     const findUnique = vi.fn().mockResolvedValue(assignment);
     const deleteMany = vi.fn().mockResolvedValue({ count: 1 });
     const module = await Test.createTestingModule({
@@ -387,7 +387,7 @@ describe('VolunteersService.unassign', () => {
     return { findUnique, deleteMany, result };
   }
 
-  const upcoming = { shift: { endsAt: new Date(Date.now() + 3_600_000) } };
+  const upcoming = { shift: { startsAt: new Date(Date.now() + 3_600_000) } };
 
   it('removes only the own assignment', async () => {
     const { findUnique, deleteMany, result } = await run(upcoming);
@@ -410,12 +410,12 @@ describe('VolunteersService.unassign', () => {
     expect(deleteMany).not.toHaveBeenCalled();
   });
 
-  it('keeps the hours of a shift that has ended: 409', async () => {
+  it('keeps the hours of a shift that has started, even in progress: 409', async () => {
     const { deleteMany, result } = await run({
-      shift: { endsAt: new Date(Date.now() - 1000) },
+      shift: { startsAt: new Date(Date.now() - 1000) },
     });
 
-    await expect(result).rejects.toThrow('Shift already ended');
+    await expect(result).rejects.toThrow('Shift already started');
     expect(deleteMany).not.toHaveBeenCalled();
   });
 });

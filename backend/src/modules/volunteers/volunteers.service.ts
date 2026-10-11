@@ -127,14 +127,14 @@ export class VolunteersService {
   async unassign(shiftId: string, volunteerId: string) {
     const assignment = await this.prisma.shiftAssignment.findUnique({
       where: { shiftId_volunteerId: { shiftId, volunteerId } },
-      select: { shift: { select: { endsAt: true } } },
+      select: { shift: { select: { startsAt: true } } },
     });
     if (!assignment) {
       throw new NotFoundException('Not registered on this shift');
     }
-    // Past shifts are history (hours, attestation): nobody erases their own after the fact
-    if (assignment.shift.endsAt <= new Date()) {
-      throw new ConflictException('Shift already ended');
+    // A started shift already counts in the hours and attestation: same cutoff as a manager removal
+    if (assignment.shift.startsAt <= new Date()) {
+      throw new ConflictException('Shift already started');
     }
     await this.prisma.shiftAssignment.deleteMany({
       where: { shiftId, volunteerId },

@@ -150,6 +150,21 @@ describe('VolunteerShiftsPage sign-up', () => {
     expect(screen.queryByRole('button', { name: "S'inscrire" })).toBeNull();
   });
 
+  it('shows "En cours" instead of a sign-out on a started shift of mine', async () => {
+    logInAs('VOLUNTEER');
+    const inProgress = {
+      ...shifts[0],
+      startsAt: new Date(Date.now() - 3_600_000).toISOString(),
+      endsAt: new Date(Date.now() + 3_600_000).toISOString(),
+    };
+    stubApi(vi.fn().mockResolvedValue(json([inProgress])));
+
+    renderPage();
+
+    expect(await screen.findByText('En cours')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Se désinscrire' })).toBeNull();
+  });
+
   it('shows the right button on each shift', async () => {
     logInAs('VOLUNTEER');
     const open = {

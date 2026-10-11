@@ -24,6 +24,8 @@ import type { Shift, ShiftInput } from '../features/volunteers/types.ts';
 const ERROR_MESSAGES: Record<string, string> = {
   'Shift is full': 'Ce créneau est complet.',
   'Shift already ended': 'Ce créneau est terminé.',
+  'Shift already started':
+    "Ce créneau a commencé : la désinscription n'est plus possible.",
   'Already registered': 'Vous êtes déjà inscrit sur ce créneau.',
   'Overlaps another of your shifts':
     'Ce créneau chevauche un autre de vos créneaux.',
