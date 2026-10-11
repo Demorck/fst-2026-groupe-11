@@ -1,12 +1,19 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { TicketStatus } from '../../generated/prisma/enums.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { OrganizationsService } from '../organizations/organizations.service.js';
 import { TICKET_CODE_ALPHABET } from './ticket-code.js';
 import { TicketsService } from './tickets.service.js';
 
 const eventId = 'e1';
 const participantId = 'p1';
+const noOrganizations = { provide: OrganizationsService, useValue: {} };
 
 function setup({
   capacity = 2,
@@ -37,6 +44,7 @@ async function build(prisma: ReturnType<typeof setup>) {
         provide: PrismaService,
         useValue: { $transaction: prisma.$transaction },
       },
+      noOrganizations,
     ],
   }).compile();
   return module.get(TicketsService);
@@ -164,6 +172,7 @@ describe('TicketsService.listForUser', () => {
       providers: [
         TicketsService,
         { provide: PrismaService, useValue: { ticket: { findMany } } },
+        noOrganizations,
       ],
     }).compile();
 
@@ -177,5 +186,129 @@ describe('TicketsService.listForUser', () => {
     });
     expect(args.orderBy).toEqual({ event: { startsAt: 'asc' } });
     expect(args.select.event.select.title).toBe(true);
+  });
+});
+
+async function buildCheckin({
+  event = { id: eventId } as { id: string } | null,
+  ticket = {
+    eventId,
+    status: TicketStatus.RESERVED,
+    checkedInAt: null,
+  } as {
+    eventId: string;
+    status: TicketStatus;
+    checkedInAt: Date | null;
+  } | null,
+  manager = true,
+} = {}) {
+  const prisma = {
+    event: { findUnique: vi.fn().mockResolvedValue(event) },
+    ticket: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findUnique: vi.fn().mockResolvedValue(ticket),
+      update: vi.fn().mockResolvedValue({ id: 't1' }),
+    },
+  };
+  const canManageEvent = vi.fn().mockResolvedValue(manager);
+  const module = await Test.createTestingModule({
+    providers: [
+      TicketsService,
+      { provide: PrismaService, useValue: prisma },
+      { provide: OrganizationsService, useValue: { canManageEvent } },
+    ],
+  }).compile();
+  return { service: module.get(TicketsService), prisma, canManageEvent };
+}
+
+describe('TicketsService.listForEvent', () => {
+  it('lists every ticket of the event for a manager', async () => {
+    const { service, prisma, canManageEvent } = await buildCheckin();
+
+    await service.listForEvent(eventId, 'u1');
+
+    expect(canManageEvent).toHaveBeenCalledWith('u1', eventId);
+    expect(prisma.ticket.findMany.mock.calls[0][0].where).toEqual({ eventId });
+  });
+
+  it('searches by participant name or ticket code, ignoring case', async () => {
+    const { service, prisma } = await buildCheckin();
+
+    await service.listForEvent(eventId, 'u1', '  ali ');
+
+    expect(prisma.ticket.findMany.mock.calls[0][0].where.OR).toEqual([
+      { participant: { name: { contains: 'ali', mode: 'insensitive' } } },
+      { code: { contains: 'ali', mode: 'insensitive' } },
+    ]);
+  });
+
+  it('throws 404 for an unknown event', async () => {
+    const { service } = await buildCheckin({ event: null });
+
+    await expect(service.listForEvent(eventId, 'u1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('throws 403 to someone who does not manage the event', async () => {
+    const { service, prisma } = await buildCheckin({ manager: false });
+
+    await expect(service.listForEvent(eventId, 'u1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(prisma.ticket.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('TicketsService.checkIn', () => {
+  it('records the check-in time only if the ticket is not checked in yet', async () => {
+    const { service, prisma } = await buildCheckin();
+
+    await service.checkIn('t1', 'u1');
+
+    const { where, data } = prisma.ticket.update.mock.calls[0][0];
+    expect(where).toEqual({
+      id: 't1',
+      checkedInAt: null,
+      status: TicketStatus.RESERVED,
+    });
+    expect(data.checkedInAt).toBeInstanceOf(Date);
+  });
+
+  it('throws 409 when the ticket is already checked in', async () => {
+    const { service, prisma } = await buildCheckin();
+    prisma.ticket.update.mockRejectedValue({ code: 'P2025' });
+
+    await expect(service.checkIn('t1', 'u1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  it('refuses a cancelled ticket', async () => {
+    const { service, prisma } = await buildCheckin({
+      ticket: { eventId, status: TicketStatus.CANCELLED, checkedInAt: null },
+    });
+
+    await expect(service.checkIn('t1', 'u1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.ticket.update).not.toHaveBeenCalled();
+  });
+
+  it('throws 404 for an unknown ticket', async () => {
+    const { service } = await buildCheckin({ ticket: null });
+
+    await expect(service.checkIn('t1', 'u1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('throws 403 to someone who does not manage the event', async () => {
+    const { service, prisma } = await buildCheckin({ manager: false });
+
+    await expect(service.checkIn('t1', 'u1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(prisma.ticket.update).not.toHaveBeenCalled();
   });
 });
