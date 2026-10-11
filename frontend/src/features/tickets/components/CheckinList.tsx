@@ -44,8 +44,13 @@ export default function CheckinList({ eventId }: { eventId: string }) {
         // Checked in from another device meanwhile: show the real state
         setNotice(`${participant.name} est déjà marqué(e) présent(e).`);
         setReload((n) => n + 1);
+      } else if (err instanceof ApiError && err.status === 400) {
+        setNotice(`Le billet de ${participant.name} est annulé.`);
+        setReload((n) => n + 1);
       } else {
-        setNotice((err as Error).message);
+        setNotice(
+          `Impossible de marquer ${participant.name} présent(e), réessayez.`,
+        );
       }
     } finally {
       setPending(null);
@@ -62,7 +67,7 @@ export default function CheckinList({ eventId }: { eventId: string }) {
   if (error) {
     return (
       <p role="alert" className="text-red-600">
-        {error.message}
+        Impossible de charger les inscrits, réessayez plus tard.
       </p>
     );
   }

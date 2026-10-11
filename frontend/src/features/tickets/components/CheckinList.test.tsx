@@ -99,6 +99,24 @@ describe('CheckinList', () => {
     expect(await screen.findByText(/Présent depuis/)).toBeInTheDocument();
   });
 
+  it('explains in French that a ticket was cancelled meanwhile', async () => {
+    stubFetch(
+      json([ticket]),
+      json({ message: 'Ticket is cancelled' }, 400),
+      json([{ ...ticket, status: 'CANCELLED' }]),
+    );
+    render(<CheckinList eventId="e1" />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Marquer présent' }),
+    );
+
+    expect(
+      await screen.findByText('Le billet de Alice est annulé.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Ticket is cancelled')).not.toBeInTheDocument();
+  });
+
   it('shows access denied to an organizer who does not manage the event', async () => {
     stubFetch(json({ message: 'Not a manager of this event' }, 403));
     render(<CheckinList eventId="e1" />);
