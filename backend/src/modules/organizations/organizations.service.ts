@@ -680,6 +680,55 @@ export class OrganizationsService {
   }
 
   /**
+   * For the coverage view of a manager: the organizations each member works for on the event, and
+   * whether the manager may take them off it. Only a hint for the interface: the rule is the one of
+   * removeVolunteerParticipation, which still decides.
+   */
+  async eventVolunteers(managerId: string, eventId: string) {
+    const links = await this.prisma.eventOrganization.findMany({
+      where: { eventId },
+      select: {
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            members: {
+              where: { status: MembershipStatus.ACCEPTED },
+              select: { userId: true, role: true, invitedById: true },
+            },
+          },
+        },
+      },
+    });
+
+    const result = new Map<
+      string,
+      { organizations: { id: string; name: string }[]; removable: boolean }
+    >();
+    for (const { organization } of links) {
+      const { members, ...named } = organization;
+      const me = members.find(
+        (m) => m.userId === managerId && m.role === OrganizationRole.MANAGER,
+      );
+      for (const member of members) {
+        const entry = result.get(member.userId) ?? {
+          organizations: [],
+          removable: false,
+        };
+        entry.organizations.push(named);
+        const removable =
+          !!me &&
+          member.userId !== managerId &&
+          (member.role === OrganizationRole.VOLUNTEER ||
+            (isCreator(me) && !isCreator(member)));
+        entry.removable ||= removable;
+        result.set(member.userId, entry);
+      }
+    }
+    return result;
+  }
+
+  /**
    * Ends a membership and takes the member off the upcoming shifts they can no longer do: those of
    * events that no other organization of theirs runs. Past shifts stay (hours, attestation).
    */
