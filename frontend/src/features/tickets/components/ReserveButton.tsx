@@ -15,9 +15,11 @@ import TicketQrCode from './TicketQrCode.tsx';
 export default function ReserveButton({
   eventId,
   startsAt,
+  full,
 }: {
   eventId: string;
   startsAt: string;
+  full: boolean;
 }) {
   const { user } = useAuth();
   const { tickets, error } = useMyTickets(!!user);
@@ -146,6 +148,15 @@ export default function ReserveButton({
     return (
       <p className="text-sm text-muted">
         Les réservations sont fermées : l'événement a commencé.
+      </p>
+    );
+  }
+
+  // The API refuses it anyway: do not offer a booking that cannot succeed
+  if (full) {
+    return (
+      <p className="text-sm text-muted">
+        L'événement est complet : plus aucune place à réserver.
       </p>
     );
   }

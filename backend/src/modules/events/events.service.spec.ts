@@ -33,6 +33,8 @@ async function build(
         useValue: {
           assertManagesAll: vi.fn().mockResolvedValue(undefined),
           volunteerStatuses: vi.fn().mockResolvedValue(new Map()),
+          canManageEvent: vi.fn().mockResolvedValue(false),
+          isVolunteerOfEvent: vi.fn().mockResolvedValue(false),
           ...organizations,
         },
       },
@@ -146,6 +148,7 @@ describe('EventsService', () => {
       remainingSeats: 0,
       volunteerStatus: null,
       canManage: false,
+      canVolunteer: false,
     });
   });
 
@@ -186,6 +189,47 @@ describe('EventsService', () => {
 
       expect(canManageEvent).not.toHaveBeenCalled();
       expect(event.canManage).toBe(false);
+    });
+  });
+
+  describe('canVolunteer', () => {
+    const row = {
+      id: 'e1',
+      capacity: 10,
+      _count: { tickets: 0 },
+      shifts: [],
+      organizations: [],
+    };
+
+    it.each([
+      ['a volunteer of an organization of the event', Role.VOLUNTEER, true],
+      ['a volunteer of another organization', Role.VOLUNTEER, false],
+      ['a manager of an organization of the event', Role.ORGANIZER, true],
+    ])('tells %s', async (_who, role, member) => {
+      const findUnique = vi.fn().mockResolvedValue(row);
+      const isVolunteerOfEvent = vi.fn().mockResolvedValue(member);
+
+      const event = await (
+        await build({ findUnique }, { isVolunteerOfEvent })
+      ).findOne('e1', { id: 'u1', role });
+
+      expect(isVolunteerOfEvent).toHaveBeenCalledWith('u1', 'e1');
+      expect(event.canVolunteer).toBe(member);
+    });
+
+    it.each([
+      ['a participant', { id: 'u1', role: Role.PARTICIPANT }],
+      ['a visitor', undefined],
+    ])('never asks for %s', async (_who, user) => {
+      const findUnique = vi.fn().mockResolvedValue(row);
+      const isVolunteerOfEvent = vi.fn();
+
+      const event = await (
+        await build({ findUnique }, { isVolunteerOfEvent })
+      ).findOne('e1', user);
+
+      expect(isVolunteerOfEvent).not.toHaveBeenCalled();
+      expect(event.canVolunteer).toBe(false);
     });
   });
 

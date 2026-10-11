@@ -127,14 +127,14 @@ Hiérarchie des gestionnaires : le **gestionnaire principal** est celui qui a cr
 - **Journal** : trois entrées chez Club Sport et BDE (retrait, départ, invitation annulée).
 - **Dashboard** (`orga` puis `orga2`) : la soirée jeux (dans 2 heures) cumule « Peu rempli » et « Créneaux incomplets », la conférence IA (complète) n'a rien à signaler ; `orga2` ne voit que ses événements. Le sélecteur d'organisation restreint le tableau.
 - **Manque de bénévoles** : connecté en bénévole ou organisateur, « Il manque N bénévole(s) » apparaît sur la carte du tournoi de futsal et de la soirée jeux.
-- **Droits hérités** : `benevole1` réserve une place (et voit « Mes billets ») sur un événement de son BDE, `benevole3` sur la soirée jeux (organisation non rejointe) ; `orga` a un billet pour le tournoi de futsal et s'inscrit lui-même au créneau « Buvette » de la soirée de rentrée (se désinscrire, puis se réinscrire). Seul le gestionnaire principal retire un co-gestionnaire d'un événement (comme pour l'organisation). `participant1` reste refusé sur les créneaux bénévoles, avec « réservée au rôle Bénévole ou Organisateur ».
+- **Droits hérités** : `benevole1` réserve une place (et voit « Mes billets ») sur un événement de son BDE, `benevole3` sur la soirée jeux (organisation non rejointe) ; `orga` a un billet pour le tournoi de futsal et s'inscrit lui-même au créneau « Buvette » de la soirée de rentrée (se désinscrire, puis se réinscrire). Seul le gestionnaire principal retire un co-gestionnaire d'un événement (comme pour l'organisation). `participant1` reste refusé sur les créneaux bénévoles, avec « réservée au rôle Bénévole ou Organisateur ». Les créneaux d'un événement ne s'ouvrent qu'aux membres de ses organisations : `benevole3` n'a pas le lien « Créneaux bénévoles » sur la soirée jeux, et l'adresse `/events/<id>/shifts` saisie à la main est refusée.
 - **Pastille** : `benevole3` et `orga2` voient « Mes organisations » avec un compteur tant que leur invitation du BDE n'est pas traitée.
 
 | Événement                          | Particularité                                                                 |
 |------------------------------------|-------------------------------------------------------------------------------|
 | Soirée de rentrée (dans 7 jours)   | Capacité 100, créneaux couverts : accueil (bénévoles) et buvette (`orga`)                                    |
 | Tournoi de futsal (dans 14 jours)  | Trois créneaux : partiellement couvert, couvert, vide                         |
-| Conférence IA (dans 21 jours)      | **Complète** (capacité 2) : la réservation doit être refusée                  |
+| Conférence IA (dans 21 jours)      | **Complète** (capacité 2) : pas de bouton « Réserver », l'API refuse aussi    |
 | Atelier code créatif (dans 30 j.)  | Aucun billet, autre organisateur                                              |
 | Soirée jeux (dans 2 heures)        | Personne n'est encore validé : pour essayer le check-in, un billet annulé     |
 | Gala, tournoi de l'an dernier, conférence cybersécurité | Passés, billets validés ou non : historique pour la prédiction d'affluence |

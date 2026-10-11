@@ -157,9 +157,15 @@ export class EventsService {
     const canManage =
       user?.role === Role.ORGANIZER &&
       (await this.organizations.canManageEvent(user.id, id));
+    // Opens the shifts page: the API refuses it to who is in no organization of the event
+    const canVolunteer =
+      !!user &&
+      hasRole(user.role, Role.VOLUNTEER) &&
+      (await this.organizations.isVolunteerOfEvent(user.id, id));
     return {
       ...present(event, await this.volunteerStatuses(user, [id])),
       canManage,
+      canVolunteer,
     };
   }
 

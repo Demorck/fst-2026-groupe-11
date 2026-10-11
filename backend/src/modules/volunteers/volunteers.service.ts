@@ -35,6 +35,15 @@ export class VolunteersService {
       userId,
       eventId,
     );
+    // Same rule as a sign-up: the shifts of an event are for the members of its organizations
+    if (
+      !isOrganizer &&
+      !(await this.organizations.isVolunteerOfEvent(userId, eventId))
+    ) {
+      throw new ForbiddenException(
+        'Not a volunteer of an organization of this event',
+      );
+    }
     const shifts = await this.prisma.shift.findMany({
       where: { eventId },
       orderBy: { startsAt: 'asc' },

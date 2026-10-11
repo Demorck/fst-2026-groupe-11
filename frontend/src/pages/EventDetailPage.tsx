@@ -185,8 +185,12 @@ export default function EventDetailPage() {
             label="Remplissage"
             className="h-2"
           />
-          <ReserveButton eventId={event.id} startsAt={event.startsAt} />
-          {volunteerView && (
+          <ReserveButton
+            eventId={event.id}
+            startsAt={event.startsAt}
+            full={event.remainingSeats <= 0}
+          />
+          {event.canVolunteer && (
             <Link
               to={`/events/${event.id}/shifts`}
               className="btn btn-secondary"

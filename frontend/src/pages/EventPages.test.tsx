@@ -431,6 +431,21 @@ describe('check-in link', () => {
   });
 });
 
+describe('shifts link', () => {
+  it.each([
+    ['a volunteer of an organization of the event', true],
+    ['a volunteer of another organization', false],
+  ])('is shown to %s: %s', async (_who, canVolunteer) => {
+    logInAs('VOLUNTEER');
+    renderAt('/events/e1', json({ ...event, canVolunteer }));
+
+    await screen.findByRole('heading', { name: 'Gala' });
+    expect(!!screen.queryByRole('link', { name: 'Créneaux bénévoles' })).toBe(
+      canVolunteer,
+    );
+  });
+});
+
 describe('EventDetailPage when the event changes', () => {
   it('ignores a slow answer for the event that was left', async () => {
     let release: (response: Response) => void = () => {};

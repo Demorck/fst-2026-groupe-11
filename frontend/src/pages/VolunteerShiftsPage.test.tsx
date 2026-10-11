@@ -71,6 +71,27 @@ function stubApi(api: ReturnType<typeof vi.fn>, canManage = true) {
 }
 
 describe('VolunteerShiftsPage', () => {
+  it('explains the refusal to a volunteer of no organization of the event', async () => {
+    logInAs('VOLUNTEER');
+    stubApi(
+      vi
+        .fn()
+        .mockResolvedValue(
+          json(
+            { message: 'Not a volunteer of an organization of this event' },
+            403,
+          ),
+        ),
+      false,
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Vous n'êtes bénévole d'aucune organisation de cet événement.",
+    );
+  });
+
   it('names the event under the title', async () => {
     logInAs('VOLUNTEER');
     stubApi(vi.fn().mockResolvedValue(json(shifts)));

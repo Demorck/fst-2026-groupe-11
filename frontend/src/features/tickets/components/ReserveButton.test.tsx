@@ -14,10 +14,10 @@ function logInAs(role: Role) {
 const inOneDay = new Date(Date.now() + 86_400_000).toISOString();
 const anHourAgo = new Date(Date.now() - 3_600_000).toISOString();
 
-const renderButton = (startsAt = inOneDay) =>
+const renderButton = (startsAt = inOneDay, full = false) =>
   render(
     <MemoryRouter>
-      <ReserveButton eventId="e1" startsAt={startsAt} />
+      <ReserveButton eventId="e1" startsAt={startsAt} full={full} />
       <DialogHost />
     </MemoryRouter>,
   );
@@ -91,6 +91,29 @@ describe('ReserveButton', () => {
       ).toBeVisible();
     },
   );
+
+  it('offers no booking on a full event', async () => {
+    logInAs('PARTICIPANT');
+    const fetch = stubFetch(new Response('{}'));
+
+    renderButton(inOneDay, true);
+
+    expect(await screen.findByText(/L'événement est complet/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Réserver' })).toBeNull();
+    expect(posts(fetch)).toHaveLength(0);
+  });
+
+  it('still shows the ticket held on a full event', async () => {
+    logInAs('PARTICIPANT');
+    stubFetch(new Response('{}'), [
+      { code: 'B2H9M3V3', event: { id: 'e1', startsAt: inOneDay } },
+    ]);
+
+    renderButton(inOneDay, true);
+
+    expect(await screen.findByText(/Votre place est réservée/)).toBeVisible();
+    expect(screen.queryByText(/L'événement est complet/)).toBeNull();
+  });
 
   it('asks for a confirmation before calling the API', async () => {
     logInAs('PARTICIPANT');

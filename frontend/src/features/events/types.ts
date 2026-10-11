@@ -74,6 +74,8 @@ export interface EventWithSeats extends EventDetail {
 /** GET /events/:id also says whether the viewer manages the event (organizer of one of its organizations). */
 export interface EventWithAccess extends EventWithSeats {
   canManage: boolean;
+  /** Member of an organization of the event: may open its shifts. */
+  canVolunteer: boolean;
 }
 
 export const formatEventDate = (iso: string) =>

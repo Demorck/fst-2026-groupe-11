@@ -50,7 +50,9 @@ export default function VolunteerShiftsPage() {
     () =>
       listShifts(eventId)
         .then(setShifts)
-        .catch((err: Error) => setError(err.message)),
+        .catch((err: Error) =>
+          setError(ERROR_MESSAGES[err.message] ?? err.message),
+        ),
     [eventId],
   );
 

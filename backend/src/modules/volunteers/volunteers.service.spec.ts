@@ -243,6 +243,18 @@ describe('VolunteersService.listShifts', () => {
       (await build(setupList(null))).listShifts('e1', 'v1'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('refuses a volunteer of no organization of the event: 403', async () => {
+    const prisma = setupList();
+    const organizations = organizationsMock({
+      isVolunteerOfEvent: vi.fn().mockResolvedValue(false),
+    });
+
+    await expect(
+      (await build(prisma, organizations)).listShifts('e1', 'v1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.shift.findMany).not.toHaveBeenCalled();
+  });
 });
 
 describe('VolunteersService.assign', () => {
