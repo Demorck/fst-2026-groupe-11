@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -451,5 +452,181 @@ describe('EventsService', () => {
         'organizations',
       );
     });
+  });
+});
+
+const manager = { id: 'u1', role: Role.ORGANIZER };
+
+/** Prisma for update and remove: the event exists, the caller manages it, nobody is booked. */
+async function buildWrite({
+  exists = 1,
+  canManage = true,
+  reserved = 0,
+  assignments = 0,
+  current = ['o1'],
+} = {}) {
+  const tx = {
+    $queryRaw: vi.fn().mockResolvedValue([
+      {
+        startsAt: new Date('2026-12-01T19:00:00Z'),
+        endsAt: new Date('2026-12-01T23:00:00Z'),
+      },
+    ]),
+    ticket: {
+      count: vi.fn().mockResolvedValue(reserved),
+      deleteMany: vi.fn(),
+    },
+    shiftAssignment: { count: vi.fn().mockResolvedValue(assignments) },
+    eventOrganization: {
+      findMany: vi
+        .fn()
+        .mockResolvedValue(
+          current.map((organizationId) => ({ organizationId })),
+        ),
+    },
+    event: { update: vi.fn(), delete: vi.fn() },
+  };
+  const assertManagesAll = vi.fn().mockResolvedValue(undefined);
+  const module = await Test.createTestingModule({
+    providers: [
+      EventsService,
+      {
+        provide: PrismaService,
+        useValue: {
+          event: { count: vi.fn().mockResolvedValue(exists) },
+          $transaction: (callback: (t: typeof tx) => unknown) => callback(tx),
+        },
+      },
+      {
+        provide: OrganizationsService,
+        useValue: {
+          assertManagesAll,
+          canManageEvent: vi.fn().mockResolvedValue(canManage),
+        },
+      },
+    ],
+  }).compile();
+  const service = module.get(EventsService);
+  // The returned detail is covered by the findOne tests
+  vi.spyOn(service, 'findOne').mockResolvedValue({} as never);
+  return { service, tx, assertManagesAll };
+}
+
+describe('EventsService.update', () => {
+  it('updates the fields of an event its organization manages', async () => {
+    const { service, tx } = await buildWrite();
+
+    await service.update('e1', { title: 'Nouveau titre' }, manager);
+
+    expect(tx.event.update).toHaveBeenCalledWith({
+      where: { id: 'e1' },
+      data: { title: 'Nouveau titre' },
+    });
+  });
+
+  it('throws 404 for an unknown event and 403 to who does not manage it', async () => {
+    const unknown = await buildWrite({ exists: 0 });
+    const stranger = await buildWrite({ canManage: false });
+
+    await expect(
+      unknown.service.update('e1', {}, manager),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      stranger.service.update('e1', {}, manager),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(stranger.tx.event.update).not.toHaveBeenCalled();
+  });
+
+  it('checks the dates against the stored ones when only one changes', async () => {
+    const { service, tx } = await buildWrite();
+
+    await expect(
+      service.update(
+        'e1',
+        { endsAt: new Date('2026-12-01T18:00:00Z') },
+        manager,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(tx.event.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses a capacity below the reserved tickets', async () => {
+    const { service, tx } = await buildWrite({ reserved: 3 });
+
+    await expect(
+      service.update('e1', { capacity: 2 }, manager),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await service.update('e1', { capacity: 3 }, manager);
+    expect(tx.event.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('adds and removes only the organizations that change, which the user must manage', async () => {
+    const { service, tx, assertManagesAll } = await buildWrite({
+      current: ['o1', 'o2'],
+    });
+
+    await service.update('e1', { organizationIds: ['o2', 'o3'] }, manager);
+
+    expect(assertManagesAll).toHaveBeenCalledWith('u1', ['o3', 'o1']);
+    expect(tx.event.update.mock.calls[0][0].data.organizations).toEqual({
+      deleteMany: { organizationId: { in: ['o1'] } },
+      create: [{ organizationId: 'o3' }],
+    });
+  });
+
+  it('refuses to remove an organization whose members are on a shift', async () => {
+    const { service, tx } = await buildWrite({
+      current: ['o1', 'o2'],
+      assignments: 1,
+    });
+
+    await expect(
+      service.update('e1', { organizationIds: ['o2'] }, manager),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tx.event.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('EventsService.remove', () => {
+  it('deletes an event nobody is booked on, with its cancelled tickets', async () => {
+    const { service, tx } = await buildWrite();
+
+    await service.remove('e1', 'u1');
+
+    expect(tx.ticket.deleteMany).toHaveBeenCalledWith({
+      where: { eventId: 'e1' },
+    });
+    expect(tx.event.delete).toHaveBeenCalledWith({ where: { id: 'e1' } });
+  });
+
+  it.each([
+    ['a reserved ticket', { reserved: 1 }],
+    ['a volunteer on a shift', { assignments: 1 }],
+  ])('refuses when there is %s (history)', async (_case, state) => {
+    const { service, tx } = await buildWrite(state);
+
+    await expect(service.remove('e1', 'u1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(tx.event.delete).not.toHaveBeenCalled();
+  });
+
+  it('throws 404 when another manager deleted it meanwhile', async () => {
+    const { service, tx } = await buildWrite();
+    tx.$queryRaw.mockResolvedValue([]);
+
+    await expect(service.remove('e1', 'u1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(tx.event.delete).not.toHaveBeenCalled();
+  });
+
+  it('throws 403 to who does not manage the event', async () => {
+    const { service, tx } = await buildWrite({ canManage: false });
+
+    await expect(service.remove('e1', 'u1')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(tx.event.delete).not.toHaveBeenCalled();
   });
 });
