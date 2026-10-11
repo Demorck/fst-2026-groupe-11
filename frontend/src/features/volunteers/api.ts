@@ -23,4 +23,4 @@ export const joinShift = (id: string) =>
   apiFetch<void>(`/shifts/${id}/assignments`, { method: 'POST' });
 
 export const leaveShift = (id: string) =>
-  apiFetch<void>(`/shifts/${id}/assignments`, { method: 'DELETE' });
+  apiFetch<void>(`/shifts/${id}/assignments/me`, { method: 'DELETE' });

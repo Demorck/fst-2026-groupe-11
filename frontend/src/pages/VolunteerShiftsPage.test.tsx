@@ -266,7 +266,7 @@ describe('VolunteerShiftsPage sign-up', () => {
 
     expect(await join()).toBeVisible();
     const [url, init] = fetch.mock.calls[1] as [string, RequestInit];
-    expect(url).toBe('/api/shifts/s1/assignments');
+    expect(url).toBe('/api/shifts/s1/assignments/me');
     expect(init.method).toBe('DELETE');
   });
 
