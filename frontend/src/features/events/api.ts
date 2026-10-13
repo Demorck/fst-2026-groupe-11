@@ -24,3 +24,13 @@ export const listUpcomingEvents = (organizationId?: string) =>
 
 export const getEvent = (id: string) =>
   apiFetch<EventWithAccess>(`/events/${encodeURIComponent(id)}`);
+
+/** Only the fields sent change; `organizationIds` replaces the list. */
+export const updateEvent = (id: string, input: Partial<CreateEventInput>) =>
+  apiFetch<EventWithAccess>(`/events/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+
+export const deleteEvent = (id: string) =>
+  apiFetch<void>(`/events/${encodeURIComponent(id)}`, { method: 'DELETE' });

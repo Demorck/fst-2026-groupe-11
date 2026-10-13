@@ -5,6 +5,7 @@ import CheckinPage from './pages/CheckinPage.tsx';
 import CreateEventPage from './pages/CreateEventPage.tsx';
 import DashboardPage from './pages/DashboardPage.tsx';
 import EventDetailPage from './pages/EventDetailPage.tsx';
+import EditEventPage from './pages/EditEventPage.tsx';
 import EventsPage from './pages/EventsPage.tsx';
 import HealthPage from './pages/HealthPage.tsx';
 import AttestationPage from './pages/AttestationPage.tsx';
@@ -35,6 +36,7 @@ export const router = createBrowserRouter([
         element: <RequireAuth roles={['ORGANIZER']} />,
         children: [
           { path: 'events/new', element: <CreateEventPage /> },
+          { path: 'events/:eventId/edit', element: <EditEventPage /> },
           { path: 'events/:eventId/checkin', element: <CheckinPage /> },
           { path: 'dashboard', element: <DashboardPage /> },
         ],

@@ -5,26 +5,39 @@ import TextField from '../../../components/TextField.tsx';
 import { useSubmit } from '../../auth/hooks/useSubmit.ts';
 import { getMyOrganizations } from '../../organizations/api.ts';
 import type { MyOrganization } from '../../organizations/types.ts';
-import { createEvent } from '../api.ts';
+import { createEvent, updateEvent } from '../api.ts';
 import DateTimeField from '../../../components/DateTimeField.tsx';
+import { fromIso } from '../../../components/dateTime.ts';
+import { EVENT_ERRORS } from '../messages.ts';
 import CategoryChips from './CategoryChips.tsx';
 import EventPreview from './EventPreview.tsx';
-import type { EventCategory } from '../types.ts';
+import type { EventCategory, EventWithAccess } from '../types.ts';
 
-export default function CreateEventForm() {
+/** Creates an event, or edits `event` when given (fields filled in from it). */
+export default function CreateEventForm({
+  event,
+}: {
+  event?: EventWithAccess;
+}) {
   const navigate = useNavigate();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [startsAt, setStartsAt] = useState('');
-  const [endsAt, setEndsAt] = useState('');
-  const [location, setLocation] = useState('');
-  const [capacity, setCapacity] = useState('');
-  const [category, setCategory] = useState<EventCategory>('CONFERENCE');
-  const [imageUrl, setImageUrl] = useState('');
+  const [title, setTitle] = useState(event?.title ?? '');
+  const [description, setDescription] = useState(event?.description ?? '');
+  const [startsAt, setStartsAt] = useState(
+    event ? fromIso(event.startsAt) : '',
+  );
+  const [endsAt, setEndsAt] = useState(event ? fromIso(event.endsAt) : '');
+  const [location, setLocation] = useState(event?.location ?? '');
+  const [capacity, setCapacity] = useState(event ? String(event.capacity) : '');
+  const [category, setCategory] = useState<EventCategory>(
+    event?.category ?? 'CONFERENCE',
+  );
+  const [imageUrl, setImageUrl] = useState(event?.imageUrl ?? '');
   // Organizations the author manages: an event always belongs to at least one of them
   const [managed, setManaged] = useState<MyOrganization[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>(
+    event?.organizations.map(({ id }) => id) ?? [],
+  );
   const { submit, pending, error } = useSubmit(async () => {
     // datetime-local has no timezone, Date reads it as local time
     const start = new Date(startsAt);
@@ -38,7 +51,7 @@ export default function CreateEventForm() {
     if (selected.length === 0) {
       throw new Error('Choisissez au moins une organisation.');
     }
-    const event = await createEvent({
+    const input = {
       title: title.trim(),
       description: description.trim(),
       startsAt: start.toISOString(),
@@ -48,8 +61,11 @@ export default function CreateEventForm() {
       category,
       imageUrl: imageUrl.trim() || undefined,
       organizationIds: selected,
-    });
-    await navigate(`/events/${event.id}`);
+    };
+    const saved = event
+      ? await updateEvent(event.id, input)
+      : await createEvent(input);
+    await navigate(`/events/${saved.id}`);
   });
 
   useEffect(() => {
@@ -58,18 +74,26 @@ export default function CreateEventForm() {
         const mineManaged = mine.filter(({ role }) => role === 'MANAGER');
         setManaged(mineManaged);
         // A single organization needs no choice
-        if (mineManaged.length === 1) setSelected([mineManaged[0].id]);
+        if (!event && mineManaged.length === 1) {
+          setSelected([mineManaged[0].id]);
+        }
       })
       .catch((err: Error) => setLoadError(err.message));
-  }, []);
+  }, [event]);
+
+  // Co-organizers the user does not manage stay on the event, shown but locked
+  const others =
+    event?.organizations.filter(
+      ({ id }) => !managed?.some((organization) => organization.id === id),
+    ) ?? [];
 
   const toggle = (id: string) =>
     setSelected((ids) =>
       ids.includes(id) ? ids.filter((other) => other !== id) : [...ids, id],
     );
 
-  function onSubmit(event: SyntheticEvent) {
-    event.preventDefault();
+  function onSubmit(e: SyntheticEvent) {
+    e.preventDefault();
     void submit();
   }
 
@@ -196,13 +220,19 @@ export default function CreateEventForm() {
                   {name}
                 </label>
               ))}
+              {others.map(({ id, name }) => (
+                <label key={id} className="chip opacity-60">
+                  <input type="checkbox" checked disabled className="sr-only" />
+                  {name}
+                </label>
+              ))}
             </div>
           </fieldset>
         </section>
 
         {error && (
           <p role="alert" className="alert-error">
-            {error}
+            {EVENT_ERRORS[error] ?? error}
           </p>
         )}
         <div className="flex flex-col gap-3 border-t border-line-soft pt-6 sm:flex-row">
@@ -211,10 +241,16 @@ export default function CreateEventForm() {
             disabled={pending}
             className="btn btn-primary min-h-12 px-5"
           >
-            {pending ? 'Création...' : "Créer l'événement"}
+            {event
+              ? pending
+                ? 'Enregistrement...'
+                : 'Enregistrer les modifications'
+              : pending
+                ? 'Création...'
+                : "Créer l'événement"}
           </button>
           <Link
-            to="/events"
+            to={event ? `/events/${event.id}` : '/events'}
             className="btn btn-secondary min-h-12 px-5 font-normal"
           >
             Annuler
@@ -231,10 +267,12 @@ export default function CreateEventForm() {
           location={location}
           capacity={Number(capacity)}
         />
-        <p className="alert-note">
-          Les créneaux bénévoles se configurent après la création, depuis le
-          dashboard.
-        </p>
+        {!event && (
+          <p className="alert-note">
+            Les créneaux bénévoles se configurent après la création, depuis le
+            dashboard.
+          </p>
+        )}
       </aside>
     </div>
   );

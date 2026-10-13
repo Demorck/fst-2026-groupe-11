@@ -72,3 +72,15 @@ export const TIMES = Array.from(
   { length: 96 },
   (_, i) => `${pad(Math.floor(i / 4))}:${pad((i % 4) * 15)}`,
 );
+
+/** An ISO date from the API, as a form value in local time. */
+export function fromIso(iso: string) {
+  const date = new Date(iso);
+  return toValue({
+    y: date.getFullYear(),
+    m: date.getMonth() + 1,
+    d: date.getDate(),
+    h: date.getHours(),
+    min: date.getMinutes(),
+  });
+}

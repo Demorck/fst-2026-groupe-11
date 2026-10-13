@@ -181,6 +181,7 @@ const EVENT_ORGANIZATIONS: Record<number, string[]> = {
   6: ['bde'],
   7: ['sport'],
   8: ['num'],
+  9: ['bde'],
 };
 
 const eventId = (n: number) =>
@@ -266,6 +267,16 @@ const EVENTS = [
     organizer: 'orga2',
     ...at(-90 * DAY, 2 * HOUR),
   },
+  // Nobody booked nor on a shift (only a cancelled ticket): can be deleted
+  {
+    id: eventId(9),
+    title: 'Pique-nique de fin d’année',
+    category: EventCategory.OTHER,
+    location: 'Parc de la Pépinière',
+    capacity: 60,
+    organizer: 'orga',
+    ...at(45 * DAY, 4 * HOUR),
+  },
 ];
 
 // [shift number, event number, title, required volunteers, offset from the event start, volunteers]
@@ -285,6 +296,8 @@ const SHIFTS: [number, number, string, number, number, string[]][] = [
   [10, 1, 'Buvette', 1, 2 * HOUR, ['orga']],
   // Past, worked by a manager: listed in the hours of the BDE with an attestation, like a volunteer
   [11, 6, 'Logistique', 1, 1 * HOUR, ['orga']],
+  // Empty shift of an event that can still be deleted
+  [12, 9, 'Installation', 2, 0, []],
 ];
 
 // [event number, participant, status, checked in]
@@ -313,6 +326,7 @@ const TICKETS: [number, string, TicketStatus, boolean][] = [
   [1, 'benevole1', TicketStatus.RESERVED, false], // volunteer, event of their own organization
   [5, 'benevole3', TicketStatus.RESERVED, false], // volunteer, event of an organization they have not joined
   [2, 'orga', TicketStatus.RESERVED, false], // organizer, event they manage
+  [9, 'participant5', TicketStatus.CANCELLED, false], // does not prevent deleting the event
 ];
 
 // Readable fixed codes made of the ticket alphabet (no 0/O/1/I/L), e.g. DEMXAAAB
