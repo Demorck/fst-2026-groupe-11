@@ -17,12 +17,20 @@ const dto = {
 };
 const stored = { ...dto, id: 's1', eventId: 'e1' };
 
+const bde = { id: 'o1', name: 'BDE' };
+
 // 'org-1' manages the event through one of its organizations; nobody else does
 const organizationsMock = (overrides: Record<string, unknown> = {}) => ({
   canManageEvent: vi.fn((userId: string) =>
     Promise.resolve(userId === 'org-1'),
   ),
   isVolunteerOfEvent: vi.fn().mockResolvedValue(true),
+  // Alice works for the BDE and may be removed; Bob is in no organization anymore
+  eventVolunteers: vi
+    .fn()
+    .mockResolvedValue(
+      new Map([['v1', { organizations: [bde], removable: true }]]),
+    ),
   ...overrides,
 });
 
@@ -229,13 +237,37 @@ describe('VolunteersService.listShifts', () => {
     expect(result[0]).not.toHaveProperty('assignments');
   });
 
-  it('gives a manager of the event the volunteer list', async () => {
-    const result = await (await build(setupList())).listShifts('e1', 'org-1');
+  it('gives a manager of the event the volunteers with their organizations', async () => {
+    const organizations = organizationsMock();
+    const result = await (
+      await build(setupList(), organizations)
+    ).listShifts('e1', 'org-1');
 
+    expect(organizations.eventVolunteers).toHaveBeenCalledWith('org-1', 'e1');
     expect(result[0].volunteers).toEqual([
-      { id: 'v1', name: 'Alice' },
-      { id: 'v2', name: 'Bob' },
+      { id: 'v1', name: 'Alice', organizations: [bde], removable: true },
+      { id: 'v2', name: 'Bob', organizations: [], removable: false },
     ]);
+  });
+
+  it('offers no removal when the volunteer has only started shifts left', async () => {
+    const prisma = setupList();
+    prisma.shift.findMany.mockResolvedValue([
+      { ...rows[0], startsAt: new Date(Date.now() - 1000) },
+    ]);
+
+    const result = await (await build(prisma)).listShifts('e1', 'org-1');
+
+    // The removal only takes upcoming shifts: nothing would be removed
+    expect(result[0].volunteers?.[0].removable).toBe(false);
+  });
+
+  it('does not look up the organizations for a volunteer', async () => {
+    const organizations = organizationsMock();
+
+    await (await build(setupList(), organizations)).listShifts('e1', 'v1');
+
+    expect(organizations.eventVolunteers).not.toHaveBeenCalled();
   });
 
   it('throws 404 for an unknown event', async () => {

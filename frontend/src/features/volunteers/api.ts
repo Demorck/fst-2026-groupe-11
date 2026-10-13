@@ -22,5 +22,12 @@ export const deleteShift = (id: string) =>
 export const joinShift = (id: string) =>
   apiFetch<void>(`/shifts/${id}/assignments`, { method: 'POST' });
 
+/** A manager takes a volunteer off every upcoming shift of the event. */
+export const removeFromEvent = (eventId: string, volunteerId: string) =>
+  apiFetch<{ removed: number }>(
+    `/events/${eventId}/volunteers/${volunteerId}`,
+    { method: 'DELETE' },
+  );
+
 export const leaveShift = (id: string) =>
-  apiFetch<void>(`/shifts/${id}/assignments`, { method: 'DELETE' });
+  apiFetch<void>(`/shifts/${id}/assignments/me`, { method: 'DELETE' });

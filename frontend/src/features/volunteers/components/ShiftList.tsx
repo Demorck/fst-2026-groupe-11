@@ -42,6 +42,11 @@ export default function ShiftList({
         const ended = Date.parse(shift.endsAt) <= now;
         // Once started, the hours count: the API refuses a sign-out
         const started = Date.parse(shift.startsAt) <= now;
+        // Coverage is for the managers, the only ones who get the names: flag what still needs people
+        const missing =
+          shift.volunteers && !ended
+            ? shift.requiredVolunteers - shift.registered
+            : 0;
         const fill = Math.min(
           Math.round((shift.registered / shift.requiredVolunteers) * 100),
           100,
@@ -65,7 +70,12 @@ export default function ShiftList({
               </div>
             </div>
             <div className="flex min-w-60 flex-[999_1_240px] flex-col gap-2">
-              <h2 className="text-lg font-semibold">{shift.title}</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold">{shift.title}</h2>
+                {missing > 0 && (
+                  <span className="badge badge-warn">Manque {missing}</span>
+                )}
+              </div>
               <div className="flex items-center gap-2.5">
                 <div className="progress w-36">
                   <div
@@ -77,6 +87,13 @@ export default function ShiftList({
                   {shift.registered} / {shift.requiredVolunteers} bénévoles
                 </span>
               </div>
+              {shift.volunteers && (
+                <p className="text-sm text-muted">
+                  {shift.volunteers.length > 0
+                    ? shift.volunteers.map((v) => v.name).join(', ')
+                    : 'Aucun inscrit'}
+                </p>
+              )}
               {shift.assigned && (
                 <p className="text-sm font-medium text-brand-deep">
                   Vous êtes inscrit

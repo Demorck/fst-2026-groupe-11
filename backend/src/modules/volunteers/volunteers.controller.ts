@@ -81,7 +81,7 @@ export class VolunteersController {
     return this.volunteers.assign(id, user.id);
   }
 
-  @Delete('shifts/:id/assignments')
+  @Delete('shifts/:id/assignments/me')
   @HttpCode(204)
   @Roles(Role.VOLUNTEER)
   @ApiForbiddenResponse({ description: 'Réservé aux bénévoles' })

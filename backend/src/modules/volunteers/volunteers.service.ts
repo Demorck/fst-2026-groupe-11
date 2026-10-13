@@ -53,12 +53,31 @@ export class VolunteersService {
         },
       },
     });
+    const members = isOrganizer
+      ? await this.organizations.eventVolunteers(userId, eventId)
+      : null;
+    // A removal only takes upcoming shifts: without one it would find nothing to remove
+    const now = new Date();
+    const upcoming = new Set(
+      shifts
+        .filter((s) => s.startsAt > now)
+        .flatMap((s) => s.assignments.map((a) => a.volunteer.id)),
+    );
     return shifts.map(({ assignments, ...shift }) => ({
       ...shift,
       registered: assignments.length,
       assigned: assignments.some((a) => a.volunteer.id === userId),
       // Only the organizer sees who signed up
-      ...(isOrganizer && { volunteers: assignments.map((a) => a.volunteer) }),
+      ...(members && {
+        volunteers: assignments.map(({ volunteer }) => {
+          const member = members.get(volunteer.id);
+          return {
+            ...volunteer,
+            organizations: member?.organizations ?? [],
+            removable: !!member?.removable && upcoming.has(volunteer.id),
+          };
+        }),
+      }),
     }));
   }
 

@@ -38,7 +38,11 @@ function setup() {
     organizationAuditLog: { create: vi.fn(), findMany: vi.fn() },
     user: { findUnique: vi.fn() },
     event: { findUnique: vi.fn(), findMany: vi.fn() },
-    eventOrganization: { count: vi.fn(), findFirst: vi.fn() },
+    eventOrganization: {
+      count: vi.fn(),
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+    },
     shiftAssignment: { deleteMany: vi.fn(), findMany: vi.fn() },
     $queryRaw: vi.fn(),
     $transaction: vi.fn(),
@@ -1242,5 +1246,78 @@ describe('OrganizationsService', () => {
         (await build(prisma)).attestation('o1', 'v1', 'v1'),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
+  });
+});
+
+describe('OrganizationsService.eventVolunteers', () => {
+  const member = (
+    userId: string,
+    role: OrganizationRole,
+    invitedById: string | null = 'boss',
+  ) => ({ userId, role, invitedById });
+  const bde = { id: 'o1', name: 'BDE' };
+  const sport = { id: 'o2', name: 'Club Sport' };
+
+  async function run(managerId: string) {
+    const prisma = setup();
+    prisma.eventOrganization.findMany.mockResolvedValue([
+      {
+        organization: {
+          ...bde,
+          members: [
+            member('boss', OrganizationRole.MANAGER, null),
+            member('co', OrganizationRole.MANAGER),
+            member('vol', OrganizationRole.VOLUNTEER),
+          ],
+        },
+      },
+      {
+        organization: {
+          ...sport,
+          members: [
+            member('other', OrganizationRole.MANAGER, null),
+            member('vol', OrganizationRole.VOLUNTEER, 'other'),
+            member('far', OrganizationRole.VOLUNTEER, 'other'),
+          ],
+        },
+      },
+    ]);
+    const result = await (await build(prisma)).eventVolunteers(managerId, 'e1');
+    return { prisma, result };
+  }
+
+  it('reads only the accepted members of the organizations of the event', async () => {
+    const { prisma } = await run('boss');
+
+    const { where, select } =
+      prisma.eventOrganization.findMany.mock.calls[0][0];
+    expect(where).toEqual({ eventId: 'e1' });
+    expect(select.organization.select.members.where).toEqual({
+      status: MembershipStatus.ACCEPTED,
+    });
+  });
+
+  it('names every organization a volunteer works for on the event', async () => {
+    const { result } = await run('boss');
+
+    expect(result.get('vol')?.organizations).toEqual([bde, sport]);
+    expect(result.get('far')?.organizations).toEqual([sport]);
+  });
+
+  it('follows the removal rule: volunteers of my organizations, co-managers for the creator', async () => {
+    const { result } = await run('boss');
+
+    expect(result.get('vol')?.removable).toBe(true);
+    expect(result.get('co')?.removable).toBe(true);
+    // Not in an organization I manage, and never myself
+    expect(result.get('far')?.removable).toBe(false);
+    expect(result.get('boss')?.removable).toBe(false);
+  });
+
+  it('lets a co-manager remove volunteers but not other managers', async () => {
+    const { result } = await run('co');
+
+    expect(result.get('vol')?.removable).toBe(true);
+    expect(result.get('boss')?.removable).toBe(false);
   });
 });
