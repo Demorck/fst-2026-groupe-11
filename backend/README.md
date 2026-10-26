@@ -30,7 +30,7 @@ src/
     ├── volunteers/  créneaux bénévoles et affectations
     ├── dashboard/   suivi (inscriptions, remplissage, couverture)
     └── ai/
-        ├── prediction/     prédiction d'affluence
+        ├── prediction/     prédiction d'affluence (`POST /api/ai/attendance-prediction`, organisateurs) : moyenne des taux de remplissage des événements passés, pondérée par catégorie, saison et capacité
         └── communication/  génération de textes (LlmProvider, mock par défaut)
 ```
 
