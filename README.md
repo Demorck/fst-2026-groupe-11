@@ -118,12 +118,15 @@ DOMAIN=gevent.example.fr
 POSTGRES_PASSWORD=<openssl rand -hex 32>
 JWT_SECRET=<openssl rand -hex 48>
 JWT_EXPIRES_IN_SECONDS=3600
-LLM_PROVIDER=mock
 ```
 
 **Secrets GitHub** (Settings › Secrets and variables › Actions) : `VPS_HOST` (IP), `VPS_USER` (`deploy`),
-`VPS_SSH_KEY` (clé privée dédiée à la CI) et `VPS_KNOWN_HOSTS` (sortie de `ssh-keyscan -H <ip>`). Les images GHCR
-doivent être publiques, sinon faire un `docker login ghcr.io` sur le VPS.
+`VPS_SSH_KEY` (clé privée dédiée à la CI) et `VPS_KNOWN_HOSTS` (sortie de `ssh-keyscan -H <ip>`). Pour l'IA réelle,
+ajouter `GEMINI_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` et `CLOUDFLARE_API_TOKEN` : à chaque déploiement le workflow
+les écrit dans `/opt/gevent/.env` (avec `LLM_PROVIDER=gemini` et `IMAGE_PROVIDER=cloudflare`) sans toucher au reste du
+fichier. Sans ces secrets, les valeurs vides font retomber le backend sur le mock.
+
+Les images GHCR doivent être publiques, sinon faire un `docker login ghcr.io` sur le VPS.
 
 Commandes utiles, en `deploy` dans `/opt/gevent` :
 
