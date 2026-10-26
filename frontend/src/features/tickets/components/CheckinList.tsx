@@ -59,14 +59,14 @@ export default function CheckinList({ eventId }: { eventId: string }) {
 
   if (error instanceof ApiError && error.status === 403) {
     return (
-      <p role="alert" className="text-red-600">
+      <p role="alert" className="alert-error">
         Accès refusé : vous ne gérez pas cet événement.
       </p>
     );
   }
   if (error) {
     return (
-      <p role="alert" className="text-red-600">
+      <p role="alert" className="alert-error">
         Impossible de charger les inscrits, réessayez plus tard.
       </p>
     );
@@ -80,45 +80,50 @@ export default function CheckinList({ eventId }: { eventId: string }) {
         placeholder="Nom ou code du billet"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full rounded border px-3 py-2"
+        className="field"
       />
       {notice && (
-        <p role="status" className="text-amber-700">
+        <p role="status" className="alert-note">
           {notice}
         </p>
       )}
       {!tickets ? (
-        <p>Chargement...</p>
+        <div aria-busy="true" className="space-y-3">
+          <p className="sr-only">Chargement...</p>
+          <div className="skeleton h-20" />
+          <div className="skeleton h-20" />
+          <div className="skeleton h-20" />
+        </div>
       ) : tickets.length === 0 ? (
-        <p>Aucun inscrit trouvé.</p>
+        <p className="card text-muted">Aucun inscrit trouvé.</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-3">
           {tickets.map((ticket) => (
             <li
               key={ticket.id}
-              className="flex flex-wrap items-center justify-between gap-4 rounded bg-white p-4 shadow"
+              className="card flex flex-wrap items-center justify-between gap-4"
             >
-              <div>
+              <div className="min-w-0">
                 <p className="font-semibold">{ticket.participant.name}</p>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm break-all text-muted">
                   {ticket.participant.email} ·{' '}
                   <span className="font-mono">{ticket.code}</span>
                 </p>
               </div>
               {ticket.status === 'CANCELLED' ? (
-                <span className="text-gray-500">Billet annulé</span>
+                <span className="badge">Billet annulé</span>
               ) : ticket.checkedInAt ? (
-                <span className="text-green-700">
+                <span className="badge badge-ok">
                   Présent depuis {formatTime(ticket.checkedInAt)}
                 </span>
               ) : (
                 <div className="flex items-center gap-3">
-                  <span className="text-gray-600">Absent</span>
+                  <span className="badge badge-warn">Absent</span>
                   <button
                     type="button"
                     disabled={pending === ticket.id}
                     onClick={() => void markPresent(ticket)}
-                    className="rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-50"
+                    className="btn btn-primary"
                   >
                     Marquer présent
                   </button>
