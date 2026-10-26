@@ -32,10 +32,19 @@ jobs:
           docker push $REGISTRY/gevent-api:latest
           docker push $REGISTRY/gevent-web:latest
       - name: Deploy on the VPS
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           echo "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
           scp deploy/compose.yml $TARGET:/opt/gevent/compose.yml
+          # only the AI keys are managed here: DOMAIN, POSTGRES_PASSWORD and JWT_SECRET stay as set on the server;
+          # an empty key falls back to the mock
+          printf '%s\n' LLM_PROVIDER=gemini "GEMINI_API_KEY=$GEMINI_API_KEY" IMAGE_PROVIDER=cloudflare \
+            "CLOUDFLARE_ACCOUNT_ID=$CLOUDFLARE_ACCOUNT_ID" "CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN" \
+            | ssh $TARGET 'cd /opt/gevent && umask 077 && { grep -vE "^(LLM_PROVIDER|GEMINI_API_KEY|IMAGE_PROVIDER|CLOUDFLARE_ACCOUNT_ID|CLOUDFLARE_API_TOKEN)=" .env; cat; } > .env.new && mv .env.new .env'
           ssh $TARGET 'cd /opt/gevent && docker compose pull && docker compose up -d --remove-orphans && docker image prune -f'

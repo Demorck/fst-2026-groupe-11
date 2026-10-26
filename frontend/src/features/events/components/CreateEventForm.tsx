@@ -3,6 +3,7 @@ import type { SyntheticEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import TextField from '../../../components/TextField.tsx';
 import { useSubmit } from '../../auth/hooks/useSubmit.ts';
+import AttendancePrediction from '../../ai/components/AttendancePrediction.tsx';
 import { getMyOrganizations } from '../../organizations/api.ts';
 import type { MyOrganization } from '../../organizations/types.ts';
 import { createEvent } from '../api.ts';
@@ -180,6 +181,11 @@ export default function CreateEventForm() {
               onChange={(e) => setImageUrl(e.target.value)}
             />
           </div>
+          <AttendancePrediction
+            category={category}
+            startsAt={startsAt}
+            capacity={capacity}
+          />
           <fieldset className="space-y-2">
             <legend className="mb-1 text-sm font-medium">
               Organisations qui participent

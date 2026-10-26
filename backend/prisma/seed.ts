@@ -171,6 +171,66 @@ const ORGANIZATIONS = [
 // Invitations older than the 7 days of validity (organization key and user key)
 const EXPIRED_INVITATIONS = new Set(['num:benevole4']);
 
+// Past events feeding the attendance prediction, across categories, seasons and capacities.
+// Append only: ticket codes follow the order of this table.
+// [event number, title, category, capacity, days ago, reserved, checked in, cancelled, organization]
+const HISTORY: [
+  number,
+  string,
+  EventCategory,
+  number,
+  number,
+  number,
+  number,
+  number,
+  string,
+][] = [
+  [
+    9,
+    'Soirée de rentrée (édition précédente)',
+    'PARTY',
+    100,
+    365,
+    92,
+    80,
+    6,
+    'bde',
+  ], // nearly sold out
+  [10, 'Soirée d’été', 'PARTY', 120, 470, 70, 58, 8, 'bde'],
+  [11, 'Soirée de Noël', 'PARTY', 60, 300, 55, 48, 3, 'bde'],
+  [12, 'Tournoi de basket', 'SPORT', 40, 200, 22, 18, 3, 'sport'],
+  [13, 'Course solidaire', 'SPORT', 100, 150, 38, 30, 5, 'sport'], // big room, few people
+  [14, 'Tournoi de foot en salle', 'SPORT', 30, 420, 30, 27, 0, 'sport'], // sold out
+  [15, 'Conférence data science', 'CONFERENCE', 80, 250, 52, 44, 4, 'num'],
+  [16, 'Conférence carrières', 'CONFERENCE', 120, 180, 41, 33, 6, 'num'],
+  [17, 'Atelier photo', 'WORKSHOP', 20, 100, 19, 17, 2, 'num'],
+  [18, 'Atelier soudure électronique', 'WORKSHOP', 25, 330, 14, 12, 1, 'num'],
+  [19, 'Exposition étudiante', 'CULTURE', 60, 140, 33, 28, 2, 'bde'],
+  [20, 'Soirée ciné', 'CULTURE', 80, 280, 62, 55, 5, 'bde'],
+  // The only OTHER event: too little history for a confident prediction
+  [21, 'Journée portes ouvertes', 'OTHER', 100, 210, 12, 9, 4, 'bde'],
+  // Consistent history: workshops always full and cultural events always half empty, to see both warnings
+  [22, 'Atelier impression 3D', 'WORKSHOP', 20, 45, 20, 18, 0, 'num'],
+  [23, 'Atelier podcast', 'WORKSHOP', 24, 200, 23, 20, 1, 'num'],
+  [24, 'Atelier couture', 'WORKSHOP', 22, 390, 21, 19, 2, 'num'],
+  [25, 'Café philo', 'CULTURE', 60, 60, 15, 12, 2, 'bde'],
+  [26, 'Ciné-débat', 'CULTURE', 50, 170, 12, 9, 1, 'bde'],
+  [27, 'Soirée poésie', 'CULTURE', 40, 310, 9, 7, 0, 'bde'],
+  [28, 'Lecture publique', 'CULTURE', 60, 430, 14, 11, 3, 'bde'],
+];
+
+// The three older past events only have a handful of hand-made tickets; synthetic ones bring them to a
+// realistic fill rate (gala 65 %, futsal 58 %, conference 66 %). [event number, reserved, checked in, cancelled]
+const HISTORY_TOP_UP = [
+  [6, 48, 40, 2],
+  [7, 12, 10, 1],
+  [8, 30, 26, 2],
+] as const;
+
+// Synthetic participants: one account per seat, as a ticket needs a distinct participant per event
+const HISTORY_PARTICIPANTS = 100;
+const historyKey = (i: number) => `histo${String(i).padStart(3, '0')}`;
+
 // Event number -> organizations running it. The futsal tournament has two (two bubbles on its card).
 const EVENT_ORGANIZATIONS: Record<number, string[]> = {
   1: ['bde'],
@@ -181,6 +241,7 @@ const EVENT_ORGANIZATIONS: Record<number, string[]> = {
   6: ['bde'],
   7: ['sport'],
   8: ['num'],
+  ...Object.fromEntries(HISTORY.map(([n, , , , , , , , org]) => [n, [org]])),
 };
 
 const eventId = (n: number) =>
@@ -266,6 +327,15 @@ const EVENTS = [
     organizer: 'orga2',
     ...at(-90 * DAY, 2 * HOUR),
   },
+  ...HISTORY.map(([n, title, category, capacity, daysAgo, , , , org]) => ({
+    id: eventId(n),
+    title,
+    category,
+    location: 'Nancy',
+    capacity,
+    organizer: org === 'num' ? 'orga2' : 'orga',
+    ...at(-daysAgo * DAY, 3 * HOUR),
+  })),
 ];
 
 // [shift number, event number, title, required volunteers, offset from the event start, volunteers]
@@ -330,6 +400,19 @@ async function main() {
       update: { passwordHash, ...data },
     });
     users.set(email.split('@')[0], user.id);
+  }
+  for (let i = 1; i <= HISTORY_PARTICIPANTS; i++) {
+    const data = {
+      email: `${historyKey(i)}@gevent.test`,
+      name: `Participant historique ${i}`,
+      role: Role.PARTICIPANT,
+    };
+    const user = await prisma.user.upsert({
+      where: { email: data.email },
+      create: { ...data, passwordHash },
+      update: data,
+    });
+    users.set(historyKey(i), user.id);
   }
   const userId = (key: string) => users.get(key)!;
 
@@ -454,6 +537,39 @@ async function main() {
     });
   }
 
+  // History tickets: reserved (the first ones checked in), then cancelled. Participants rotate through
+  // the pool so each event starts at a different seat. A code depends on the event and the rank of the ticket
+  // only (never on a running counter), so editing HISTORY cannot shift the codes of tickets already seeded.
+  let historyTicket = 0;
+  for (const [n, reserved, checkedIn, cancelled] of [
+    ...HISTORY.map(([n, , , , , r, c, x]) => [n, r, c, x] as const),
+    ...HISTORY_TOP_UP,
+  ]) {
+    const start = EVENTS.find(
+      ({ id }) => id === eventId(n),
+    )!.startsAt.getTime();
+    for (let j = 0; j < reserved + cancelled; j++) {
+      historyTicket++;
+      const ids = {
+        eventId: eventId(n),
+        participantId: userId(
+          historyKey(((n * 13 + j) % HISTORY_PARTICIPANTS) + 1),
+        ),
+      };
+      await prisma.ticket.upsert({
+        where: { eventId_participantId: ids },
+        create: {
+          ...ids,
+          code: ticketCode(1000 + n * 200 + j),
+          status: j < reserved ? TicketStatus.RESERVED : TicketStatus.CANCELLED,
+          createdAt: new Date(start - (2 + (j % 20)) * DAY),
+          checkedInAt: j < checkedIn ? new Date(start + 10 * 60 * 1000) : null,
+        },
+        update: {},
+      });
+    }
+  }
+
   // The audit log has no natural key: fixed ids keep a rerun from duplicating the entries
   const auditId = (n: number) =>
     `cccccccc-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -489,7 +605,7 @@ async function main() {
   }
 
   console.log(
-    `Seed done: ${USERS.length} users, ${ORGANIZATIONS.length} organizations, ${EVENTS.length} events, ${SHIFTS.length} shifts, ${TICKETS.length} tickets.`,
+    `Seed done: ${USERS.length} users, ${ORGANIZATIONS.length} organizations, ${EVENTS.length} events, ${SHIFTS.length} shifts, ${TICKETS.length + historyTicket} tickets (${HISTORY_PARTICIPANTS} synthetic participants for the history).`,
   );
   console.log(
     `Demo accounts: <name>@gevent.test, password "${PASSWORD}" (see README.md).`,

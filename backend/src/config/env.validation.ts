@@ -31,8 +31,28 @@ class EnvironmentVariables {
   JWT_EXPIRES_IN_SECONDS: number;
 
   @IsOptional()
-  @IsIn(['mock'])
+  @IsIn(['mock', 'gemini'])
   LLM_PROVIDER?: string;
+
+  @IsOptional()
+  @IsString()
+  GEMINI_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  GEMINI_TEXT_MODEL?: string;
+
+  @IsOptional()
+  @IsIn(['mock', 'cloudflare'])
+  IMAGE_PROVIDER?: string;
+
+  @IsOptional()
+  @IsString()
+  CLOUDFLARE_ACCOUNT_ID?: string;
+
+  @IsOptional()
+  @IsString()
+  CLOUDFLARE_API_TOKEN?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

@@ -83,6 +83,36 @@ describe('CreateEventPage', () => {
     });
   });
 
+  it('estimates the attendance once the date and the capacity are filled', async () => {
+    const fetch = vi.fn((url: string) =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify(
+            url === '/api/organizations/mine'
+              ? [bde]
+              : {
+                  estimate: 38,
+                  fillRate: 0.76,
+                  confidence: 'LOW',
+                  sampleSize: 1,
+                  warning: null,
+                },
+          ),
+        ),
+      ),
+    );
+    vi.stubGlobal('fetch', fetch);
+    renderPage();
+
+    await fillForm('2026-12-01T19:00', '2026-12-01T23:00');
+
+    expect(await screen.findByText(/environ 38 billets/)).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/ai/attendance-prediction',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
   it('sends every organization that is ticked', async () => {
     const fetch = stubApi(
       [bde, sport, volunteerOf],

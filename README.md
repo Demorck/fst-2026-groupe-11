@@ -118,12 +118,15 @@ DOMAIN=gevent.example.fr
 POSTGRES_PASSWORD=<openssl rand -hex 32>
 JWT_SECRET=<openssl rand -hex 48>
 JWT_EXPIRES_IN_SECONDS=3600
-LLM_PROVIDER=mock
 ```
 
 **Secrets GitHub** (Settings › Secrets and variables › Actions) : `VPS_HOST` (IP), `VPS_USER` (`deploy`),
-`VPS_SSH_KEY` (clé privée dédiée à la CI) et `VPS_KNOWN_HOSTS` (sortie de `ssh-keyscan -H <ip>`). Les images GHCR
-doivent être publiques, sinon faire un `docker login ghcr.io` sur le VPS.
+`VPS_SSH_KEY` (clé privée dédiée à la CI) et `VPS_KNOWN_HOSTS` (sortie de `ssh-keyscan -H <ip>`). Pour l'IA réelle,
+ajouter `GEMINI_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` et `CLOUDFLARE_API_TOKEN` : à chaque déploiement le workflow
+les écrit dans `/opt/gevent/.env` (avec `LLM_PROVIDER=gemini` et `IMAGE_PROVIDER=cloudflare`) sans toucher au reste du
+fichier. Sans ces secrets, les valeurs vides font retomber le backend sur le mock.
+
+Les images GHCR doivent être publiques, sinon faire un `docker login ghcr.io` sur le VPS.
 
 Commandes utiles, en `deploy` dans `/opt/gevent` :
 
@@ -144,6 +147,7 @@ Commandes utiles, en `deploy` dans `/opt/gevent` :
 | `benevole1` à `benevole4`                | Bénévole    | Créneaux couverts, partiellement couverts ou vides ; `benevole4` a quitté le BDE et a une invitation expirée |
 | `participant1` à `participant5`          | Participant | Billets réservés, annulés, validés (check-in) ou non          |
 | `participant6`                           | Participant | Aucun billet : pour essayer la réservation                    |
+| `histo001` à `histo100`                  | Participant | Comptes synthétiques : ils remplissent les billets de l'historique d'affluence (aucun billet à venir) |
 
 | Organisation                | Membres et particularités                                                                                   |
 |-----------------------------|-------------------------------------------------------------------------------------------------------------|
@@ -169,6 +173,7 @@ Hiérarchie des gestionnaires : le **gestionnaire principal** est celui qui a cr
 - **Manque de bénévoles** : connecté en bénévole ou organisateur, « Il manque N bénévole(s) » apparaît sur la carte du tournoi de futsal et de la soirée jeux.
 - **Droits hérités** : `benevole1` réserve une place (et voit « Mes billets ») sur un événement de son BDE, `benevole3` sur la soirée jeux (organisation non rejointe) ; `orga` a un billet pour le tournoi de futsal et s'inscrit lui-même au créneau « Buvette » de la soirée de rentrée (se désinscrire, puis se réinscrire). Seul le gestionnaire principal retire un co-gestionnaire d'un événement (comme pour l'organisation). `participant1` reste refusé sur les créneaux bénévoles, avec « réservée au rôle Bénévole ou Organisateur ». Les créneaux d'un événement ne s'ouvrent qu'aux membres de ses organisations : `benevole3` n'a pas le lien « Créneaux bénévoles » sur la soirée jeux, et l'adresse `/events/<id>/shifts` saisie à la main est refusée.
 - **Couverture des créneaux** : connecté en `orga`, « Créneaux bénévoles » du tournoi de futsal : noms des inscrits sous chaque créneau, « Manque 1 » sur l'accueil et « Manque 2 » sur le rangement, puis « Bénévoles inscrits » avec l'organisation de chacun (`benevole2` est au BDE et au Club Sport) et « Retirer de l'événement ». Sur la soirée de rentrée, `orga` se voit lui-même sans bouton. Une fois l'invitation du BDE acceptée, `orga2` voit le tournoi de futsal sans pouvoir retirer `benevole3` (Club Sport seulement).
+- **Prédiction d'affluence** : connecté en `orga`, « Créer un événement » : dès que la catégorie, la date de début et la capacité sont renseignées, un bloc « Affluence estimée » affiche le nombre de billets attendus, un niveau de confiance et, parfois, un conseil sur la capacité (même résultat via `POST /api/ai/attendance-prediction` dans Swagger, `/api/docs`). Pour une date dans le mois qui vient (valeurs approximatives, elles dépendent de la date) : un **atelier de 20 places** donne environ 18 billets avec l'alerte « presque complet » (les ateliers passés affichaient complet), un **événement culture de 50 places** donne environ 19 billets avec l'alerte « se remplissent peu », une **soirée de 100 places** environ 80 billets sans alerte, la catégorie **« Autre »** (2 événements passés) une confiance faible sans conseil, et `participant1` reçoit un 403. Les conseils n'apparaissent qu'avec une confiance moyenne ou élevée. Les données viennent de `npm run db:seed` (voir le tableau des événements passés).
 - **Pastille** : `benevole3` et `orga2` voient « Mes organisations » avec un compteur tant que leur invitation du BDE n'est pas traitée.
 
 | Événement                          | Particularité                                                                 |
@@ -179,6 +184,7 @@ Hiérarchie des gestionnaires : le **gestionnaire principal** est celui qui a cr
 | Atelier code créatif (dans 30 j.)  | Aucun billet, autre organisateur                                              |
 | Soirée jeux (dans 2 heures)        | Personne n'est encore validé : pour essayer le check-in, un billet annulé     |
 | Gala, tournoi de l'an dernier, conférence cybersécurité | Passés, billets validés ou non : historique pour la prédiction d'affluence |
+| 20 autres événements passés (2 ans d'historique) | Toutes les catégories, des saisons et capacités variées, billets réservés, validés ou annulés. Cas limites : **presque complet** (soirée de rentrée de l'an dernier, 92 %), **complet** (foot en salle), **quasi vide** (portes ouvertes, 12 %), **grande salle peu remplie** (course solidaire, 38 %), **peu d'historique** (catégorie « Autre », confiance faible), **ateliers toujours pleins** (conseil d'augmenter la capacité) et **événements culture toujours à moitié vides** (conseil de la réduire) |
 
 Pour repartir d'une base vierge : `cd backend && npx prisma migrate reset` (détruit les données locales), puis `npm run db:seed`.
 
