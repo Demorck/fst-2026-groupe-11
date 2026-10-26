@@ -93,6 +93,46 @@ Plus de détails dans [backend/README.md](backend/README.md) et [frontend/README
 Pour modifier le schéma de la base : éditer `backend/prisma/schema.prisma` puis lancer
 `npm run prisma:migrate --prefix backend` (crée une nouvelle migration et régénère le client).
 
+## Déploiement
+
+Chaque merge sur `main` dont la CI passe est déployé automatiquement sur le VPS (workflow
+`.github/workflows/deploy.yml`, relançable à la main depuis l'onglet Actions) :
+
+1. GitHub Actions construit deux images et les pousse sur GHCR : `gevent-api` (`backend/Dockerfile`) et `gevent-web`
+   (`frontend/Dockerfile` : le front buildé, servi par Caddy).
+2. Il copie `deploy/compose.yml` dans `/opt/gevent` sur le VPS puis lance `docker compose pull && up -d`.
+3. Au démarrage, l'API applique les migrations (`prisma migrate deploy`) : une migration poussée sur `main` part en
+   prod, d'où la règle des migrations immuables.
+
+```
+Internet ─► Caddy (web, HTTPS automatique) ─┬─ /api/* ─► api (NestJS :3000) ─► db (Postgres, port non exposé)
+                                            └─ le reste ─► fichiers du front (repli sur index.html)
+```
+
+Front et API sont sur la même origine, comme avec le proxy Vite en dev : `apiFetch` ne change pas.
+
+**Sur le VPS**, `/opt/gevent/.env` (jamais commité, `chmod 600`) contient les secrets :
+
+```
+DOMAIN=gevent.example.fr
+POSTGRES_PASSWORD=<openssl rand -hex 32>
+JWT_SECRET=<openssl rand -hex 48>
+JWT_EXPIRES_IN_SECONDS=3600
+LLM_PROVIDER=mock
+```
+
+**Secrets GitHub** (Settings › Secrets and variables › Actions) : `VPS_HOST` (IP), `VPS_USER` (`deploy`),
+`VPS_SSH_KEY` (clé privée dédiée à la CI) et `VPS_KNOWN_HOSTS` (sortie de `ssh-keyscan -H <ip>`). Les images GHCR
+doivent être publiques, sinon faire un `docker login ghcr.io` sur le VPS.
+
+Commandes utiles, en `deploy` dans `/opt/gevent` :
+
+| Commande                                                    | Rôle                                               |
+|-------------------------------------------------------------|----------------------------------------------------|
+| `docker compose ps` / `docker compose logs -f api`          | État des conteneurs / logs de l'API                |
+| `docker compose exec api npx prisma db seed`                | Données de démo (comptes `password123` publics !)  |
+| `docker compose exec -T db pg_dump -U gevent gevent > x.sql` | Sauvegarde de la base                              |
+
 ## Données de démo
 
 `npm run db:seed` (lancé par `npm run setup`) crée des comptes et des données pour tester sans rien saisir. Mot de passe de tous les comptes : `password123` (démo locale uniquement). Le seed est idempotent et refuse de tourner avec `NODE_ENV=production`.

@@ -1,0 +1,47 @@
+# Production stack, copied to /opt/gevent on the VPS by the Deploy workflow.
+# Secrets live in /opt/gevent/.env on the server only (see README, section Déploiement)
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gevent
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: gevent
+    # no ports: only reachable by the api inside the Docker network (published ports bypass ufw)
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'gevent']
+      interval: 5s
+      retries: 10
+
+  api:
+    image: ghcr.io/demorck/gevent-api:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://gevent:${POSTGRES_PASSWORD}@db:5432/gevent?schema=public
+      CORS_ORIGIN: https://${DOMAIN}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    image: ghcr.io/demorck/gevent-web:latest
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      DOMAIN: ${DOMAIN}
+    # keeps the HTTPS certificates across restarts (Let's Encrypt rate limits)
+    volumes:
+      - caddy-data:/data
+    depends_on:
+      - api
+
+volumes:
+  db-data:
+  caddy-data:

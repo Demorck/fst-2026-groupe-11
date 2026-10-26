@@ -1,0 +1,14 @@
+# Production entry point: serves the built SPA and forwards /api to NestJS on the same origin,
+# like the Vite proxy does in dev. HTTPS certificate for {$DOMAIN} is obtained automatically
+{$DOMAIN} {
+	encode
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+	handle {
+		root * /srv
+		# React Router: unknown paths fall back to the SPA
+		try_files {path} /index.html
+		file_server
+	}
+}
