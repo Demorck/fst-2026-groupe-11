@@ -1,0 +1,41 @@
+name: Deploy
+
+# runs only after a green CI on main, so a broken build never reaches the VPS
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency: deploy
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io/demorck
+      TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Build and push images
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker build -t $REGISTRY/gevent-api:latest backend
+          docker build -t $REGISTRY/gevent-web:latest frontend
+          docker push $REGISTRY/gevent-api:latest
+          docker push $REGISTRY/gevent-web:latest
+      - name: Deploy on the VPS
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          scp deploy/compose.yml $TARGET:/opt/gevent/compose.yml
+          ssh $TARGET 'cd /opt/gevent && docker compose pull && docker compose up -d --remove-orphans && docker image prune -f'

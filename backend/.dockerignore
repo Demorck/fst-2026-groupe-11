@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+src/generated
+.env
+# a stale build info would make tsc skip emitting into the empty dist
+*.tsbuildinfo
