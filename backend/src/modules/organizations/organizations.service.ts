@@ -28,7 +28,7 @@ const SHOWN_TO_MANAGERS: MembershipStatus[] = [
 ];
 
 // Members whose past shifts still count for the hours and the attestation, even after they left
-const WITH_HISTORY: MembershipStatus[] = [
+export const WITH_HISTORY: MembershipStatus[] = [
   MembershipStatus.ACCEPTED,
   MembershipStatus.LEFT,
   MembershipStatus.REMOVED,

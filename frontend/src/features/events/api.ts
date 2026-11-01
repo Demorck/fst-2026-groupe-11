@@ -24,3 +24,18 @@ export const listUpcomingEvents = (organizationId?: string) =>
 
 export const getEvent = (id: string) =>
   apiFetch<EventWithAccess>(`/events/${encodeURIComponent(id)}`);
+
+/** Only the fields sent change; `organizationIds` replaces the list, `imageUrl: null` clears the image. */
+export const updateEvent = (
+  id: string,
+  input: Partial<Omit<CreateEventInput, 'imageUrl'>> & {
+    imageUrl?: string | null;
+  },
+) =>
+  apiFetch<EventWithAccess>(`/events/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+
+export const deleteEvent = (id: string) =>
+  apiFetch<void>(`/events/${encodeURIComponent(id)}`, { method: 'DELETE' });
