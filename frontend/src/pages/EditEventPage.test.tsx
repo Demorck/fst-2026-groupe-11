@@ -100,6 +100,14 @@ describe('EditEventPage', () => {
     expect(JSON.parse(init!.body as string).imageUrl).toBeNull();
   });
 
+  it('does not predict the attendance of an existing event', async () => {
+    renderPage();
+
+    await screen.findByLabelText('Titre');
+
+    expect(screen.queryByLabelText("Estimation de l'affluence")).toBeNull();
+  });
+
   it('shows the co-organizer the user does not manage as locked', async () => {
     renderPage();
 

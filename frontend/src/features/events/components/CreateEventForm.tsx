@@ -209,11 +209,14 @@ export default function CreateEventForm({
               onChange={(e) => setImageUrl(e.target.value)}
             />
           </div>
-          <AttendancePrediction
-            category={category}
-            startsAt={startsAt}
-            capacity={capacity}
-          />
+          {/* The prediction helps choose the capacity before creating: an existing event has its real bookings */}
+          {!event && (
+            <AttendancePrediction
+              category={category}
+              startsAt={startsAt}
+              capacity={capacity}
+            />
+          )}
           <fieldset className="space-y-2">
             <legend className="mb-1 text-sm font-medium">
               Organisations qui participent
