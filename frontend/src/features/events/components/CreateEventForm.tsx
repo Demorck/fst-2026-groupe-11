@@ -63,7 +63,11 @@ export default function CreateEventForm({
       organizationIds: selected,
     };
     const saved = event
-      ? await updateEvent(event.id, input)
+      ? // undefined is dropped from the JSON and would keep the old image
+        await updateEvent(event.id, {
+          ...input,
+          imageUrl: input.imageUrl ?? null,
+        })
       : await createEvent(input);
     await navigate(`/events/${saved.id}`);
   });

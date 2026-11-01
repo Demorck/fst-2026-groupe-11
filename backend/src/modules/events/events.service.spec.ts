@@ -585,6 +585,20 @@ describe('EventsService.update', () => {
     ).rejects.toBeInstanceOf(ConflictException);
     expect(tx.event.update).not.toHaveBeenCalled();
   });
+
+  it('ignores pending, refused or expired invitations of a removed organization', async () => {
+    const { service, tx } = await buildWrite({ current: ['o1', 'o2'] });
+
+    await service.update('e1', { organizationIds: ['o2'] }, manager);
+
+    expect(
+      tx.shiftAssignment.count.mock.calls[0][0].where.volunteer.memberships
+        .some,
+    ).toEqual({
+      organizationId: { in: ['o1'] },
+      status: { in: ['ACCEPTED', 'LEFT', 'REMOVED'] },
+    });
+  });
 });
 
 describe('EventsService.remove', () => {
@@ -597,6 +611,16 @@ describe('EventsService.remove', () => {
       where: { eventId: 'e1' },
     });
     expect(tx.event.delete).toHaveBeenCalledWith({ where: { id: 'e1' } });
+  });
+
+  it('locks the shifts so nobody signs up between the count and the delete', async () => {
+    const { service, tx } = await buildWrite();
+
+    await service.remove('e1', 'u1');
+
+    const [sql] = tx.$queryRaw.mock.calls[1] as [TemplateStringsArray];
+    expect(sql.join('?')).toContain('FROM "Shift"');
+    expect(sql.join('?')).toContain('FOR UPDATE');
   });
 
   it.each([

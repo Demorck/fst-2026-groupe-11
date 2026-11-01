@@ -101,4 +101,22 @@ describe('PATCH and DELETE /events/:id (e2e)', () => {
     expect((await send('patch', Role.ORGANIZER)).status).toBe(200);
     expect((await send('delete', Role.ORGANIZER)).status).toBe(204);
   });
+
+  it('clears the image with null', async () => {
+    prisma.eventOrganization.count.mockResolvedValue(1);
+
+    const patch = await request(app.getHttpServer())
+      .patch(`/api/events/${EVENT}`)
+      .set(
+        'Authorization',
+        `Bearer ${await jwt.signAsync({ sub: 'u1', role: Role.ORGANIZER })}`,
+      )
+      .send({ imageUrl: null });
+
+    expect(patch.status).toBe(200);
+    expect(tx.event.update).toHaveBeenLastCalledWith({
+      where: { id: EVENT },
+      data: { imageUrl: null },
+    });
+  });
 });

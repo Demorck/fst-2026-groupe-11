@@ -11,6 +11,7 @@ import type { AuthUser } from '@/common/guards/jwt-auth.guard.js';
 import {
   OrganizationsService,
   type VolunteerStatus,
+  WITH_HISTORY,
 } from '../organizations/organizations.service.js';
 import { omitLogo, toPublic } from '../organizations/public-organization.js';
 import { PrismaService } from '@/prisma/prisma.service.js';
@@ -219,7 +220,13 @@ export class EventsService {
             where: {
               shift: { eventId: id },
               volunteer: {
-                memberships: { some: { organizationId: { in: removed } } },
+                // Same members as the hours: a pending or refused invitation counts for nothing
+                memberships: {
+                  some: {
+                    organizationId: { in: removed },
+                    status: { in: WITH_HISTORY },
+                  },
+                },
               },
             },
           })) > 0
@@ -252,6 +259,8 @@ export class EventsService {
         SELECT id FROM "Event" WHERE id = ${id} FOR UPDATE`;
       // Deleted meanwhile by another manager
       if (!event) throw new NotFoundException('Event not found');
+      // A sign-up locks its shift, not the event: without this it could land before the delete (500)
+      await tx.$queryRaw`SELECT id FROM "Shift" WHERE "eventId" = ${id} FOR UPDATE`;
       const reserved = await tx.ticket.count({
         where: { eventId: id, status: TicketStatus.RESERVED },
       });

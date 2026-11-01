@@ -83,6 +83,23 @@ describe('EditEventPage', () => {
     );
   });
 
+  it('sends null when the image is cleared, so the stored one goes away', async () => {
+    const { fetch } = renderPage({
+      ...event,
+      imageUrl: 'https://example.com/gala.png',
+    });
+
+    await userEvent.clear(
+      await screen.findByLabelText('Image (URL, facultatif)'),
+    );
+    await save();
+
+    const [, init] = fetch.mock.calls.find(
+      ([, init]) => init?.method === 'PATCH',
+    )!;
+    expect(JSON.parse(init!.body as string).imageUrl).toBeNull();
+  });
+
   it('shows the co-organizer the user does not manage as locked', async () => {
     renderPage();
 
