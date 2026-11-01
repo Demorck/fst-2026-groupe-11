@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
+import DialogHost from '../components/DialogHost.tsx';
 import { bookTicket, cancelTicket } from '../features/tickets/store.ts';
 import EventDetailPage from './EventDetailPage.tsx';
 import EventsPage from './EventsPage.tsx';
@@ -428,6 +429,54 @@ describe('check-in link', () => {
     expect(!!screen.queryByRole('link', { name: 'Gérer le check-in' })).toBe(
       canManage,
     );
+    expect(!!screen.queryByRole('link', { name: "Modifier l'événement" })).toBe(
+      canManage,
+    );
+    expect(
+      !!screen.queryByRole('button', { name: "Supprimer l'événement" }),
+    ).toBe(canManage);
+  });
+});
+
+describe('event deletion', () => {
+  async function confirmDeletion(answer: Response) {
+    logInAs('ORGANIZER');
+    const fetch = renderAt('/events/e1', json({ ...event, canManage: true }));
+    fetch.mockImplementation((_url: string, init?: RequestInit) =>
+      Promise.resolve(
+        init?.method === 'DELETE'
+          ? answer
+          : json({ ...event, canManage: true }),
+      ),
+    );
+    render(<DialogHost />);
+    await userEvent.click(
+      await screen.findByRole('button', { name: "Supprimer l'événement" }),
+    );
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Confirmer' }),
+    );
+    return fetch;
+  }
+
+  it('deletes the event after confirmation and goes back to the list', async () => {
+    const fetch = await confirmDeletion(new Response(null, { status: 204 }));
+
+    expect(await screen.findByText('Événement supprimé.')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/events/e1',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it('explains in French why the event cannot be deleted', async () => {
+    await confirmDeletion(
+      json({ message: 'Event has tickets or volunteers' }, 409),
+    );
+
+    expect(
+      await screen.findByText(/Des billets sont réservés/),
+    ).toBeInTheDocument();
   });
 });
 

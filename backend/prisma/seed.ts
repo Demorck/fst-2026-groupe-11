@@ -355,6 +355,8 @@ const SHIFTS: [number, number, string, number, number, string[]][] = [
   [10, 1, 'Buvette', 1, 2 * HOUR, ['orga']],
   // Past, worked by a manager: listed in the hours of the BDE with an attestation, like a volunteer
   [11, 6, 'Logistique', 1, 1 * HOUR, ['orga']],
+  // Empty shift of an event that can still be deleted
+  [12, 9, 'Installation', 2, 0, []],
 ];
 
 // [event number, participant, status, checked in]

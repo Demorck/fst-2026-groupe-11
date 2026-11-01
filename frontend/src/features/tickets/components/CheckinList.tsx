@@ -101,7 +101,7 @@ export default function CheckinList({ eventId }: { eventId: string }) {
           {tickets.map((ticket) => (
             <li
               key={ticket.id}
-              className="card flex flex-wrap items-center justify-between gap-4"
+              className="card flex flex-wrap items-center justify-between gap-4 p-4"
             >
               <div className="min-w-0">
                 <p className="font-semibold">{ticket.participant.name}</p>
@@ -123,7 +123,7 @@ export default function CheckinList({ eventId }: { eventId: string }) {
                     type="button"
                     disabled={pending === ticket.id}
                     onClick={() => void markPresent(ticket)}
-                    className="btn btn-primary"
+                    className="btn btn-primary btn-sm"
                   >
                     Marquer présent
                   </button>

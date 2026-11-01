@@ -1,8 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -10,7 +14,9 @@ import {
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -25,6 +31,7 @@ import { RolesGuard } from '@/common/guards/roles.guard.js';
 import { Role } from '@/generated/prisma/enums.js';
 import { CreateEventDto } from './dto/create-event.dto.js';
 import { ListEventsQueryDto } from './dto/list-events-query.dto.js';
+import { UpdateEventDto } from './dto/update-event.dto.js';
 import { EventsService } from './events.service.js';
 
 @ApiTags('events')
@@ -69,5 +76,47 @@ export class EventsController {
   @ApiNotFoundResponse({ description: 'Événement introuvable' })
   findOne(@Param('id') id: string, @CurrentUser() user: AuthUser | undefined) {
     return this.events.findOne(id, user);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ORGANIZER)
+  @ApiBearerAuth()
+  @ApiOkResponse({ description: 'Événement modifié' })
+  @ApiBadRequestResponse({ description: 'Données invalides' })
+  @ApiForbiddenResponse({
+    description: "Pas gestionnaire d'une organisation concernée",
+  })
+  @ApiNotFoundResponse({ description: 'Événement introuvable' })
+  @ApiConflictResponse({
+    description:
+      'Capacité sous le nombre de billets réservés, ou organisation retirée dont des membres sont sur un créneau',
+  })
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateEventDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.events.update(id, dto, user);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ORGANIZER)
+  @ApiBearerAuth()
+  @ApiNoContentResponse({ description: 'Événement supprimé' })
+  @ApiForbiddenResponse({
+    description: "Pas gestionnaire d'une organisation de l'événement",
+  })
+  @ApiNotFoundResponse({ description: 'Événement introuvable' })
+  @ApiConflictResponse({
+    description: 'Des billets sont réservés ou des bénévoles inscrits',
+  })
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.events.remove(id, user.id);
   }
 }

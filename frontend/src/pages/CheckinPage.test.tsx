@@ -51,7 +51,11 @@ describe('CheckinPage', () => {
     );
     render(<RouterProvider router={router} />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Boom');
+    // the English message of the API is not shown
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Impossible de charger l'événement, réessayez plus tard.",
+    );
+    expect(screen.queryByText(/Boom/)).toBeNull();
     expect(screen.queryByText(/Accès refusé/)).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
