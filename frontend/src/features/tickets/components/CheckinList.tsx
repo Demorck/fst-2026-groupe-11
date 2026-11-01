@@ -88,9 +88,14 @@ export default function CheckinList({ eventId }: { eventId: string }) {
         </p>
       )}
       {!tickets ? (
-        <p className="text-muted">Chargement...</p>
+        <div aria-busy="true" className="space-y-3">
+          <p className="sr-only">Chargement...</p>
+          <div className="skeleton h-20" />
+          <div className="skeleton h-20" />
+          <div className="skeleton h-20" />
+        </div>
       ) : tickets.length === 0 ? (
-        <p className="text-muted">Aucun inscrit trouvé.</p>
+        <p className="card text-muted">Aucun inscrit trouvé.</p>
       ) : (
         <ul className="space-y-3">
           {tickets.map((ticket) => (

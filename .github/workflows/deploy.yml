@@ -32,10 +32,29 @@ jobs:
           docker push $REGISTRY/gevent-api:latest
           docker push $REGISTRY/gevent-web:latest
       - name: Deploy on the VPS
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           echo "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
           scp deploy/compose.yml $TARGET:/opt/gevent/compose.yml
+          # only the AI keys are managed here and only when their secrets are set: otherwise the server .env keeps
+          # its own values (DOMAIN, POSTGRES_PASSWORD, JWT_SECRET, or LLM_PROVIDER=mock set by hand)
+          lines=()
+          if [ -n "$GEMINI_API_KEY" ]; then
+            lines+=(LLM_PROVIDER=gemini "GEMINI_API_KEY=$GEMINI_API_KEY")
+          fi
+          if [ -n "$CLOUDFLARE_ACCOUNT_ID" ] && [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            lines+=(IMAGE_PROVIDER=cloudflare "CLOUDFLARE_ACCOUNT_ID=$CLOUDFLARE_ACCOUNT_ID")
+            lines+=("CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN")
+          fi
+          if [ ${#lines[@]} -gt 0 ]; then
+            keys=$(printf '%s\n' "${lines[@]}" | cut -d= -f1 | paste -sd '|')
+            printf '%s\n' "${lines[@]}" | ssh $TARGET \
+              "cd /opt/gevent && umask 077 && { grep -vE '^($keys)=' .env; cat; } > .env.new && mv .env.new .env"
+          fi
           ssh $TARGET 'cd /opt/gevent && docker compose pull && docker compose up -d --remove-orphans && docker image prune -f'

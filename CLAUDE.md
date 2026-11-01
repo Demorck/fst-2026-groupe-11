@@ -14,7 +14,7 @@
 - **Client Prisma généré** : `backend/src/generated/` est gitignoré et ne se modifie jamais à la main. Il est régénéré par `npm run prisma:generate --prefix backend` (aussi au `postinstall`).
 - **Migrations immuables** : une migration appliquée ne s'édite jamais, on en crée une nouvelle (skill `/db-migration`).
 - **Appels API du front** : uniquement via `apiFetch` (chemins relatifs à `/api`), jamais `localhost:3000` en dur.
-- **IA** : seul `LLM_PROVIDER=mock` existe. Aucun appel à un vrai LLM, aucune clé API dans le dépôt.
+- **IA** : `LLM_PROVIDER=mock` par défaut (CI, démo, tests) ; texte via `gemini` (`GEMINI_API_KEY`) et image via `IMAGE_PROVIDER=cloudflare` (`CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`), lus dans `backend/.env` seulement, jamais dans le dépôt. Les tests n'appellent jamais le réseau. Sans clé, retour au mock.
 - **Hors périmètre** (PROJECT.md) : paiement réel, scan QR caméra, app mobile, emails/push réels, facturation/abonnement des organisations (les organisations elles-mêmes sont dans le périmètre). Ne pas les implémenter, mocker si besoin.
 
 ## Données de démo (seed)
