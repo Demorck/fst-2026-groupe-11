@@ -124,7 +124,8 @@ JWT_EXPIRES_IN_SECONDS=3600
 `VPS_SSH_KEY` (clé privée dédiée à la CI) et `VPS_KNOWN_HOSTS` (sortie de `ssh-keyscan -H <ip>`). Pour l'IA réelle,
 ajouter `GEMINI_API_KEY`, `CLOUDFLARE_ACCOUNT_ID` et `CLOUDFLARE_API_TOKEN` : à chaque déploiement le workflow
 les écrit dans `/opt/gevent/.env` (avec `LLM_PROVIDER=gemini` et `IMAGE_PROVIDER=cloudflare`) sans toucher au reste du
-fichier. Sans ces secrets, les valeurs vides font retomber le backend sur le mock.
+fichier. Un secret vide ou absent ne touche à rien : le `.env` du serveur garde sa valeur (le mock par défaut).
+Pour couper l'IA réelle, supprimer le secret puis mettre `LLM_PROVIDER=mock` à la main.
 
 Les images GHCR doivent être publiques, sinon faire un `docker login ghcr.io` sur le VPS.
 
