@@ -13,7 +13,7 @@ const DEFAULT_TEXT_MODEL = 'gemini-3.5-flash-lite';
 const warnFallback = (message: string) =>
   new Logger('AiProviders').warn(`${message}: using the mock`);
 
-/** `LLM_PROVIDER=gemini` with a key, otherwise the mock (CI, demo without a key). */
+/** `LLM_PROVIDER=gemini` with a key, otherwise the mock (CI, demo without a key) */
 export function createLlmProvider(config: ConfigService): LlmProvider {
   if (config.get('LLM_PROVIDER') !== 'gemini') return new MockLlmProvider();
 
@@ -28,7 +28,7 @@ export function createLlmProvider(config: ConfigService): LlmProvider {
   );
 }
 
-/** `IMAGE_PROVIDER=cloudflare` with an account and a token, otherwise the mock. */
+/** `IMAGE_PROVIDER=cloudflare` with an account and a token, otherwise the mock */
 export function createImageProvider(config: ConfigService): ImageProvider {
   if (config.get('IMAGE_PROVIDER') !== 'cloudflare') {
     return new MockImageProvider();

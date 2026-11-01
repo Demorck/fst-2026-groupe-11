@@ -62,9 +62,9 @@ describe('AttendancePrediction', () => {
     );
     renderPrediction();
 
-    expect(await screen.findByRole('status')).toHaveTextContent(
-      "envisagez d'augmenter la capacité.",
-    );
+    expect(
+      await screen.findByText("envisagez d'augmenter la capacité."),
+    ).toBeInTheDocument();
     expect(screen.getByText('Confiance élevée')).toBeInTheDocument();
   });
 

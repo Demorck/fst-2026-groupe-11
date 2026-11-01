@@ -6,7 +6,7 @@ import type {
   AttendancePredictionResponseDto,
 } from '../dto/attendance-prediction.dto.js';
 
-// Older events say little about today's audience, and the query stays bounded as the history grows
+// Older events say little about today's audience and the query stays bounded as the history grows
 const HISTORY_YEARS = 3;
 // Weight of a past event of another category: kept low but non-zero so a rare category still gets an estimate
 const OTHER_CATEGORY_WEIGHT = 0.1;
@@ -73,14 +73,12 @@ export class PredictionService {
             Math.max(event.capacity, capacity)),
       }));
     const sameCategory = past.filter((event) => event.category === category);
-    const sameWeight = weigh(sameCategory, () => 1).reduce(
-      (sum, { weight }) => sum + weight,
-      0,
-    );
+    const same = weigh(sameCategory, () => 1);
+    const sameWeight = same.reduce((sum, { weight }) => sum + weight, 0);
     // Enough similar events: the others would only pull the estimate towards the overall average
     const samples =
       sameWeight >= MEDIUM_WEIGHT
-        ? weigh(sameCategory, () => 1)
+        ? same
         : weigh(past, (other) => (other ? OTHER_CATEGORY_WEIGHT : 1));
     const totalWeight = samples.reduce((sum, { weight }) => sum + weight, 0);
     const rate =
@@ -89,7 +87,8 @@ export class PredictionService {
       samples.reduce((sum, s) => sum + s.weight * (s.rate - rate) ** 2, 0) /
         totalWeight,
     );
-    const confidence = this.confidence(totalWeight, spread);
+    // Other categories only stabilise the estimate: lots of them must not make a rare category look certain
+    const confidence = this.confidence(sameWeight, spread);
 
     return {
       estimate: Math.round(rate * capacity),
@@ -102,9 +101,9 @@ export class PredictionService {
     };
   }
 
-  private confidence(totalWeight: number, spread: number) {
-    if (spread > MAX_SPREAD || totalWeight < MEDIUM_WEIGHT) return 'LOW';
-    return totalWeight >= HIGH_WEIGHT ? 'HIGH' : 'MEDIUM';
+  private confidence(sameWeight: number, spread: number) {
+    if (spread > MAX_SPREAD || sameWeight < MEDIUM_WEIGHT) return 'LOW';
+    return sameWeight >= HIGH_WEIGHT ? 'HIGH' : 'MEDIUM';
   }
 
   private warning(rate: number) {

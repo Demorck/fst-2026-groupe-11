@@ -205,6 +205,17 @@ describe('PredictionService', () => {
     expect((await service.predict(input())).confidence).toBe('HIGH');
   });
 
+  it('keeps a low confidence when only other categories have history', async () => {
+    const { service } = await build(
+      Array.from({ length: 20 }, () => past('SPORT', 100, 95)),
+    );
+
+    const result = await service.predict(input(100, 'OTHER'));
+
+    expect(result.confidence).toBe('LOW');
+    expect(result.warning).toBeNull();
+  });
+
   it('keeps a low confidence when similar events disagree', async () => {
     const { service } = await build([
       past('PARTY', 100, 100),

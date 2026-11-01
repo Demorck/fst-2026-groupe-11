@@ -172,7 +172,7 @@ const ORGANIZATIONS = [
 const EXPIRED_INVITATIONS = new Set(['num:benevole4']);
 
 // Past events feeding the attendance prediction, across categories, seasons and capacities.
-// Append only: ticket codes follow the order of this table.
+// Ticket codes depend on the event number and the ticket rank only: never renumber an existing row
 // [event number, title, category, capacity, days ago, reserved, checked in, cancelled, organization]
 const HISTORY: [
   number,

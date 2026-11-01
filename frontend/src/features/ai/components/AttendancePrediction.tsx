@@ -18,7 +18,7 @@ interface Answer {
   error?: string;
 }
 
-/** Estimates the attendance of the event being created, from the history of similar events. */
+/** Estimates the attendance of the event being created, from the history of similar events */
 export default function AttendancePrediction({
   category,
   startsAt,
@@ -124,15 +124,11 @@ function Estimate({
         </p>
         <p className="text-sm text-muted">
           {sampleSize > 0
-            ? `Calculé d'après ${sampleSize} événement${sampleSize > 1 ? 's' : ''} passé${sampleSize > 1 ? 's' : ''} de la même catégorie.`
+            ? `Historique : ${sampleSize} événement${sampleSize > 1 ? 's' : ''} passé${sampleSize > 1 ? 's' : ''} de la même catégorie.`
             : "Aucun événement passé de cette catégorie : l'estimation vient des autres catégories."}
         </p>
       </div>
-      {warning && (
-        <p role="status" className="alert-note">
-          {warning.message}
-        </p>
-      )}
+      {warning && <p className="alert-note">{warning.message}</p>}
     </div>
   );
 }
