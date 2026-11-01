@@ -31,7 +31,8 @@ src/
     ├── dashboard/   suivi (inscriptions, remplissage, couverture)
     └── ai/
         ├── prediction/     prédiction d'affluence (`POST /api/ai/attendance-prediction`, organisateurs) : moyenne des taux de remplissage des événements passés, pondérée par catégorie, saison et capacité
-        └── communication/  génération de textes et d'images (LlmProvider, mock par défaut)
+        └── communication/  génération de textes et d'images (LlmProvider, mock par défaut) ; description marketing
+                            et post réseau social (`POST /api/ai/communication`, gestionnaires de l'événement)
 ```
 
 ### Fournisseurs IA

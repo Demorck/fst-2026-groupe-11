@@ -8,9 +8,12 @@ import {
   createImageProvider,
   createLlmProvider,
 } from './communication/llm-provider.factory.js';
+import { OrganizationsModule } from '../organizations/organizations.module.js';
 import { PredictionService } from './prediction/prediction.service.js';
 
 @Module({
+  // The communication is reserved to the managers of the event
+  imports: [OrganizationsModule],
   controllers: [AiController],
   providers: [
     PredictionService,

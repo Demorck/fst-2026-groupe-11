@@ -6,6 +6,12 @@ export interface AttendancePredictionInput {
   capacity: number;
 }
 
+/** Drafts written by the AI, always edited by a manager before being published */
+export interface CommunicationDrafts {
+  description: string;
+  post: string;
+}
+
 export interface AttendancePredictionResult {
   /** Expected tickets, null when there is no history at all */
   estimate: number | null;
