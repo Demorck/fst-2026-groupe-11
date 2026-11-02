@@ -29,7 +29,7 @@ describe('AI (e2e)', () => {
         },
       ]),
       count: vi.fn(),
-      findUnique: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
     },
     // canManageEvent counts the organizations of the event the user manages
     eventOrganization: { count: vi.fn() },
@@ -105,7 +105,7 @@ describe('AI (e2e)', () => {
         .send(body);
 
     beforeEach(() => {
-      prisma.event.findUnique.mockResolvedValue({
+      prisma.event.findUniqueOrThrow.mockResolvedValue({
         title: 'Soirée de rentrée',
         description: 'DJ et buvette',
         startsAt: new Date('2027-09-10T18:00:00Z'),
