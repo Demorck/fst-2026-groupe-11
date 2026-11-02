@@ -1,22 +1,18 @@
-import {
-  ForbiddenException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { EventCategory } from '@/generated/prisma/enums.js';
 import { PrismaService } from '@/prisma/prisma.service.js';
 import { OrganizationsService } from '../../organizations/organizations.service.js';
 import type { CommunicationResponseDto } from '../dto/communication.dto.js';
 import { LLM_PROVIDER, type LlmProvider } from './llm-provider.interface.js';
 
+// Same labels as CATEGORY_LABELS in frontend/src/features/events/types.ts (no shared package)
 const CATEGORY_LABELS: Record<EventCategory, string> = {
-  CONFERENCE: 'conférence',
-  PARTY: 'soirée',
-  SPORT: 'sport',
-  CULTURE: 'culture',
-  WORKSHOP: 'atelier',
-  OTHER: 'autre',
+  CONFERENCE: 'Conférence',
+  PARTY: 'Soirée',
+  SPORT: 'Sport',
+  CULTURE: 'Culture',
+  WORKSHOP: 'Atelier',
+  OTHER: 'Autre',
 };
 
 // The server runs in UTC (Docker) but the audience reads Paris time
@@ -45,7 +41,8 @@ export class CommunicationService {
     eventId: string,
     userId: string,
   ): Promise<CommunicationResponseDto> {
-    const event = await this.prisma.event.findUnique({
+    await this.organizations.assertCanManageEvent(userId, eventId);
+    const event = await this.prisma.event.findUniqueOrThrow({
       where: { id: eventId },
       select: {
         title: true,
@@ -58,10 +55,6 @@ export class CommunicationService {
         organizations: { select: { organization: { select: { name: true } } } },
       },
     });
-    if (!event) throw new NotFoundException('Event not found');
-    if (!(await this.organizations.canManageEvent(userId, eventId))) {
-      throw new ForbiddenException('Not a manager of this event');
-    }
 
     const facts = [
       `Titre : ${event.title}`,

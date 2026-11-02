@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -178,7 +177,7 @@ export class EventsService {
     { organizationIds, ...data }: UpdateEventDto,
     user: AuthUser,
   ) {
-    await this.assertCanManage(user.id, id);
+    await this.organizations.assertCanManageEvent(user.id, id);
     await this.prisma.$transaction(async (tx) => {
       // Same lock as a booking: no ticket can be taken between the capacity check and the update
       const [event] = await tx.$queryRaw<{ startsAt: Date; endsAt: Date }[]>`
@@ -252,7 +251,7 @@ export class EventsService {
   }
 
   async remove(id: string, userId: string) {
-    await this.assertCanManage(userId, id);
+    await this.organizations.assertCanManageEvent(userId, id);
     await this.prisma.$transaction(async (tx) => {
       // Same lock as a booking: no ticket can be taken while the event goes away
       const [event] = await tx.$queryRaw<{ id: string }[]>`
@@ -275,15 +274,6 @@ export class EventsService {
       await tx.ticket.deleteMany({ where: { eventId: id } });
       await tx.event.delete({ where: { id } });
     });
-  }
-
-  private async assertCanManage(userId: string, eventId: string) {
-    if ((await this.prisma.event.count({ where: { id: eventId } })) === 0) {
-      throw new NotFoundException('Event not found');
-    }
-    if (!(await this.organizations.canManageEvent(userId, eventId))) {
-      throw new ForbiddenException('Not a manager of this event');
-    }
   }
 
   // The badge concerns volunteers and organizers: participants and visitors skip the query

@@ -21,25 +21,26 @@ const EVENT = {
 };
 
 async function build({
-  event = EVENT as object | null,
-  manager = true,
+  denied = null as Error | null,
   llm = new MockLlmProvider() as LlmProvider,
 } = {}) {
-  const findUnique = vi.fn().mockResolvedValue(event);
-  const canManageEvent = vi.fn().mockResolvedValue(manager);
+  const findUniqueOrThrow = vi.fn().mockResolvedValue(EVENT);
+  const assertCanManageEvent = vi.fn(() => {
+    if (denied) throw denied;
+  });
   const generate = vi.spyOn(llm, 'generate');
   const module = await Test.createTestingModule({
     providers: [
       CommunicationService,
       { provide: LLM_PROVIDER, useValue: llm },
-      { provide: PrismaService, useValue: { event: { findUnique } } },
-      { provide: OrganizationsService, useValue: { canManageEvent } },
+      { provide: PrismaService, useValue: { event: { findUniqueOrThrow } } },
+      { provide: OrganizationsService, useValue: { assertCanManageEvent } },
     ],
   }).compile();
   return {
     service: module.get(CommunicationService),
-    findUnique,
-    canManageEvent,
+    findUniqueOrThrow,
+    assertCanManageEvent,
     generate,
   };
 }
@@ -62,7 +63,7 @@ describe('CommunicationService', () => {
     expect(generate).toHaveBeenCalledTimes(2);
     for (const [prompt] of generate.mock.calls) {
       expect(prompt).toContain('Soirée de rentrée');
-      expect(prompt).toContain('soirée');
+      expect(prompt).toContain('Catégorie : Soirée');
       expect(prompt).toContain('Campus Aiguillettes');
       expect(prompt).toContain('100 places');
       expect(prompt).toContain('BDE Nancy, Club Sport');
@@ -85,24 +86,19 @@ describe('CommunicationService', () => {
     });
   });
 
-  it('answers 404 for an unknown event without calling the provider', async () => {
-    const { service, generate } = await build({ event: null });
+  it.each([
+    ['an unknown event', new NotFoundException()],
+    ['a user who does not manage the event', new ForbiddenException()],
+  ])(
+    'refuses %s before reading it or calling the provider',
+    async (_case, denied) => {
+      const { service, assertCanManageEvent, findUniqueOrThrow, generate } =
+        await build({ denied });
 
-    await expect(service.generate('e1', 'u1')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
-    expect(generate).not.toHaveBeenCalled();
-  });
-
-  it('refuses a user who does not manage the event without calling the provider', async () => {
-    const { service, canManageEvent, generate } = await build({
-      manager: false,
-    });
-
-    await expect(service.generate('e1', 'u2')).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
-    expect(canManageEvent).toHaveBeenCalledWith('u2', 'e1');
-    expect(generate).not.toHaveBeenCalled();
-  });
+      await expect(service.generate('e1', 'u2')).rejects.toBe(denied);
+      expect(assertCanManageEvent).toHaveBeenCalledWith('u2', 'e1');
+      expect(findUniqueOrThrow).not.toHaveBeenCalled();
+      expect(generate).not.toHaveBeenCalled();
+    },
+  );
 });

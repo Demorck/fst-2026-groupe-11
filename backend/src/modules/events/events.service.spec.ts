@@ -493,7 +493,6 @@ async function buildWrite({
       {
         provide: PrismaService,
         useValue: {
-          event: { count: vi.fn().mockResolvedValue(exists) },
           $transaction: (callback: (t: typeof tx) => unknown) => callback(tx),
         },
       },
@@ -501,7 +500,11 @@ async function buildWrite({
         provide: OrganizationsService,
         useValue: {
           assertManagesAll,
-          canManageEvent: vi.fn().mockResolvedValue(canManage),
+          // Same outcomes as the real check, covered in the organizations tests
+          assertCanManageEvent: vi.fn(() => {
+            if (!exists) throw new NotFoundException('Event not found');
+            if (!canManage) throw new ForbiddenException();
+          }),
         },
       },
     ],

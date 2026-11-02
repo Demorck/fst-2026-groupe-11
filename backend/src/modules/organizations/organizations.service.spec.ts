@@ -37,7 +37,7 @@ function setup() {
     },
     organizationAuditLog: { create: vi.fn(), findMany: vi.fn() },
     user: { findUnique: vi.fn() },
-    event: { findUnique: vi.fn(), findMany: vi.fn() },
+    event: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn() },
     eventOrganization: {
       count: vi.fn(),
       findFirst: vi.fn(),
@@ -407,6 +407,22 @@ describe('OrganizationsService', () => {
         expect(await (await build(prisma)).canManageEvent('u1', 'e1')).toBe(
           expected,
         );
+      },
+    );
+
+    it.each([
+      [0, 1, NotFoundException],
+      [1, 0, ForbiddenException],
+    ])(
+      'assertCanManageEvent with %i event and %i managed organization throws',
+      async (events, managed, error) => {
+        const prisma = setup();
+        prisma.event.count.mockResolvedValue(events);
+        prisma.eventOrganization.count.mockResolvedValue(managed);
+
+        await expect(
+          (await build(prisma)).assertCanManageEvent('u1', 'e1'),
+        ).rejects.toBeInstanceOf(error);
       },
     );
 

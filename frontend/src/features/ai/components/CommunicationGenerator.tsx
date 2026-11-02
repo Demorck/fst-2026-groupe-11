@@ -1,15 +1,20 @@
 import { useState } from 'react';
-import { toast } from '../../../components/dialogs.ts';
+import { confirm, toast } from '../../../components/dialogs.ts';
 import { updateEvent } from '../../events/api.ts';
+import { EVENT_ERRORS } from '../../events/messages.ts';
 import type { EventWithAccess } from '../../events/types.ts';
 import { generateCommunication } from '../api.ts';
 import type { CommunicationDrafts } from '../types.ts';
 
 // The API speaks English, the organizer reads French
 const ERRORS: Record<string, string> = {
+  ...EVENT_ERRORS,
   'The AI provider did not answer':
     "Le service d'IA n'a pas répondu. Réessayez dans un instant.",
 };
+
+// What the prompt asks for: the model often goes beyond it
+const POST_MAX = 280;
 
 /** Drafts the communication of an event with the AI: nothing is published until the manager saves it */
 export default function CommunicationGenerator({
@@ -36,10 +41,22 @@ export default function CommunicationGenerator({
     }
   }
 
-  const generate = () =>
-    run('generate', async () =>
+  async function generate() {
+    if (
+      drafts &&
+      !(await confirm({
+        title: 'Remplacer les brouillons ?',
+        message: 'Les modifications faites à la main seront perdues.',
+        confirmLabel: 'Régénérer',
+        tone: 'primary',
+      }))
+    ) {
+      return;
+    }
+    await run('generate', async () =>
       setDrafts(await generateCommunication(eventId)),
     );
+  }
 
   const save = () =>
     run('save', async () => {
@@ -86,6 +103,10 @@ export default function CommunicationGenerator({
               className="field"
             />
           </label>
+          <p className="text-sm text-muted">
+            La prochaine génération repartira de la description enregistrée :
+            n'y gardez que des informations exactes.
+          </p>
           <button
             type="button"
             className="btn btn-primary btn-sm"
@@ -102,9 +123,16 @@ export default function CommunicationGenerator({
               rows={4}
               value={drafts.post}
               onChange={(e) => setDrafts({ ...drafts, post: e.target.value })}
+              aria-describedby="post-length"
               className="field"
             />
           </label>
+          <p
+            id="post-length"
+            className={`text-right text-sm ${drafts.post.length > POST_MAX ? 'text-danger' : 'text-muted'}`}
+          >
+            {drafts.post.length} / {POST_MAX} caractères
+          </p>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -118,7 +146,7 @@ export default function CommunicationGenerator({
         type="button"
         className={`btn btn-sm ${drafts ? 'btn-secondary' : 'btn-primary'}`}
         disabled={pending !== null}
-        onClick={generate}
+        onClick={() => void generate()}
       >
         {pending === 'generate'
           ? 'Génération...'

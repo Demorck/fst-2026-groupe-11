@@ -164,7 +164,15 @@ export default function EventDetailPage() {
           </section>
 
           {event.canManage && (
-            <CommunicationGenerator eventId={event.id} onSaved={setEvent} />
+            <CommunicationGenerator
+              eventId={event.id}
+              // The answer can come back once another event is shown: keep that one
+              onSaved={(saved) =>
+                setEvent((current) =>
+                  current?.id === saved.id ? saved : current,
+                )
+              }
+            />
           )}
 
           {volunteerView && event.volunteers.required > 0 && (

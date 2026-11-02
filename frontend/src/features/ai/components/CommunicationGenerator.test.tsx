@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import DialogHost from '../../../components/DialogHost.tsx';
 import CommunicationGenerator from './CommunicationGenerator.tsx';
 
 const drafts = {
@@ -20,7 +21,12 @@ const stubFetch = (...responses: Response[]) => {
 
 const renderGenerator = () => {
   const onSaved = vi.fn();
-  render(<CommunicationGenerator eventId="e1" onSaved={onSaved} />);
+  render(
+    <>
+      <CommunicationGenerator eventId="e1" onSaved={onSaved} />
+      <DialogHost />
+    </>,
+  );
   return { onSaved, user: userEvent.setup() };
 };
 
@@ -48,7 +54,7 @@ describe('CommunicationGenerator', () => {
     );
   });
 
-  it('replaces the drafts when regenerating', async () => {
+  it('replaces the drafts when regenerating, once confirmed', async () => {
     stubFetch(
       json(drafts),
       json({ description: 'Autre texte', post: 'Autre post' }),
@@ -58,10 +64,49 @@ describe('CommunicationGenerator', () => {
     await screen.findByLabelText('Description');
 
     await user.click(screen.getByRole('button', { name: 'Régénérer' }));
+    const dialog = screen.getByRole('alertdialog', {
+      name: 'Remplacer les brouillons ?',
+    });
+    await user.click(within(dialog).getByRole('button', { name: 'Régénérer' }));
 
     expect(await screen.findByDisplayValue('Autre texte')).toBeInTheDocument();
     expect(screen.getByLabelText('Post réseau social')).toHaveValue(
       'Autre post',
+    );
+  });
+
+  it('keeps the edited drafts when regenerating is cancelled', async () => {
+    const fetch = stubFetch(json(drafts));
+    const { user } = renderGenerator();
+    await generate(user);
+    const description = await screen.findByLabelText('Description');
+    await user.type(description, ' Modifié');
+
+    await user.click(screen.getByRole('button', { name: 'Régénérer' }));
+    await user.click(screen.getByRole('button', { name: 'Annuler' }));
+
+    expect(description).toHaveValue(`${drafts.description} Modifié`);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts the characters of the post against the 280 asked for', async () => {
+    stubFetch(json({ ...drafts, post: 'x'.repeat(281) }));
+    const { user } = renderGenerator();
+    await generate(user);
+
+    expect(await screen.findByText('281 / 280 caractères')).toHaveClass(
+      'text-danger',
+    );
+  });
+
+  it('translates the errors of the events API', async () => {
+    stubFetch(json({ message: 'Event not found' }, 404));
+    const { user } = renderGenerator();
+
+    await generate(user);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Cet événement n'existe plus.",
     );
   });
 
