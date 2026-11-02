@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { EventCategory } from '@/generated/prisma/enums.js';
 import { PrismaService } from '@/prisma/prisma.service.js';
 import { OrganizationsService } from '../../organizations/organizations.service.js';
@@ -42,7 +42,8 @@ export class CommunicationService {
     userId: string,
   ): Promise<CommunicationResponseDto> {
     await this.organizations.assertCanManageEvent(userId, eventId);
-    const event = await this.prisma.event.findUniqueOrThrow({
+    // Deleted between the check above and this read: 404, not a raw Prisma P2025
+    const event = await this.prisma.event.findUnique({
       where: { id: eventId },
       select: {
         title: true,
@@ -55,6 +56,7 @@ export class CommunicationService {
         organizations: { select: { organization: { select: { name: true } } } },
       },
     });
+    if (!event) throw new NotFoundException('Event not found');
 
     const facts = [
       `Titre : ${event.title}`,
@@ -66,17 +68,16 @@ export class CommunicationService {
       `Organisé par : ${event.organizations.map((o) => o.organization.name).join(', ')}`,
       `Notes de l'organisateur : ${event.description}`,
     ].join('\n');
-    // Two calls rather than one asking for JSON: plain text is what every model returns reliably
-    const [description, post] = await Promise.all([
-      this.llm.generate(
-        `Rédige la description marketing de l'événement « ${event.title} » pour sa page d'inscription : ` +
-          `deux ou trois paragraphes courts, ton chaleureux, pour donner envie de réserver. ${RULES}\n\n${facts}`,
-      ),
-      this.llm.generate(
-        `Rédige un post pour les réseaux sociaux qui annonce l'événement « ${event.title} » : ` +
-          `280 caractères maximum, deux ou trois hashtags, une invitation à réserver. ${RULES}\n\n${facts}`,
-      ),
-    ]);
+    // Two calls rather than one asking for JSON: plain text is what every model returns reliably.
+    // One after the other: two at once trip the 429 of the free Gemini quota.
+    const description = await this.llm.generate(
+      `Rédige la description marketing de l'événement « ${event.title} » pour sa page d'inscription : ` +
+        `deux ou trois paragraphes courts, ton chaleureux, pour donner envie de réserver. ${RULES}\n\n${facts}`,
+    );
+    const post = await this.llm.generate(
+      `Rédige un post pour les réseaux sociaux qui annonce l'événement « ${event.title} » : ` +
+        `280 caractères maximum, deux ou trois hashtags, une invitation à réserver. ${RULES}\n\n${facts}`,
+    );
     return { description: description.trim(), post: post.trim() };
   }
 }

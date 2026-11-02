@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { confirm, toast } from '../../../components/dialogs.ts';
 import { updateEvent } from '../../events/api.ts';
 import { EVENT_ERRORS } from '../../events/messages.ts';
@@ -25,6 +25,8 @@ export default function CommunicationGenerator({
   onSaved: (event: EventWithAccess) => void;
 }) {
   const [drafts, setDrafts] = useState<CommunicationDrafts | null>(null);
+  // What the API returned last: tells whether the manager edited the drafts since
+  const generated = useRef<CommunicationDrafts | null>(null);
   const [pending, setPending] = useState<'generate' | 'save' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,8 +44,12 @@ export default function CommunicationGenerator({
   }
 
   async function generate() {
-    if (
+    const edited =
       drafts &&
+      (drafts.description !== generated.current?.description ||
+        drafts.post !== generated.current?.post);
+    if (
+      edited &&
       !(await confirm({
         title: 'Remplacer les brouillons ?',
         message: 'Les modifications faites à la main seront perdues.',
@@ -53,9 +59,11 @@ export default function CommunicationGenerator({
     ) {
       return;
     }
-    await run('generate', async () =>
-      setDrafts(await generateCommunication(eventId)),
-    );
+    await run('generate', async () => {
+      const result = await generateCommunication(eventId);
+      generated.current = result;
+      setDrafts(result);
+    });
   }
 
   const save = () =>
@@ -65,13 +73,14 @@ export default function CommunicationGenerator({
       toast('Description enregistrée.');
     });
 
-  function copy(text: string) {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => toast('Post copié.'))
-      .catch(() =>
-        setError('Copie impossible : sélectionnez le texte à la main.'),
-      );
+  // try/catch and not .catch(): outside a secure context navigator.clipboard is undefined and throws synchronously
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('Post copié.');
+    } catch {
+      setError('Copie impossible : sélectionnez le texte à la main.');
+    }
   }
 
   return (
@@ -136,7 +145,7 @@ export default function CommunicationGenerator({
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            onClick={() => copy(drafts.post)}
+            onClick={() => void copy(drafts.post)}
           >
             Copier le post
           </button>

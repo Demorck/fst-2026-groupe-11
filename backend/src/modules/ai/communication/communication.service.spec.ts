@@ -24,7 +24,7 @@ async function build({
   denied = null as Error | null,
   llm = new MockLlmProvider() as LlmProvider,
 } = {}) {
-  const findUniqueOrThrow = vi.fn().mockResolvedValue(EVENT);
+  const findUnique = vi.fn().mockResolvedValue(EVENT);
   const assertCanManageEvent = vi.fn(() => {
     if (denied) throw denied;
   });
@@ -33,13 +33,13 @@ async function build({
     providers: [
       CommunicationService,
       { provide: LLM_PROVIDER, useValue: llm },
-      { provide: PrismaService, useValue: { event: { findUniqueOrThrow } } },
+      { provide: PrismaService, useValue: { event: { findUnique } } },
       { provide: OrganizationsService, useValue: { assertCanManageEvent } },
     ],
   }).compile();
   return {
     service: module.get(CommunicationService),
-    findUniqueOrThrow,
+    findUnique,
     assertCanManageEvent,
     generate,
   };
@@ -92,13 +92,41 @@ describe('CommunicationService', () => {
   ])(
     'refuses %s before reading it or calling the provider',
     async (_case, denied) => {
-      const { service, assertCanManageEvent, findUniqueOrThrow, generate } =
+      const { service, assertCanManageEvent, findUnique, generate } =
         await build({ denied });
 
       await expect(service.generate('e1', 'u2')).rejects.toBe(denied);
       expect(assertCanManageEvent).toHaveBeenCalledWith('u2', 'e1');
-      expect(findUniqueOrThrow).not.toHaveBeenCalled();
+      expect(findUnique).not.toHaveBeenCalled();
       expect(generate).not.toHaveBeenCalled();
     },
   );
+
+  it('answers 404 when the event is deleted after the permission check', async () => {
+    const { service, findUnique, generate } = await build();
+    findUnique.mockResolvedValue(null);
+
+    await expect(service.generate('e1', 'u1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('calls the provider one request at a time', async () => {
+    let running = 0;
+    let peak = 0;
+    const llm: LlmProvider = {
+      generate: async () => {
+        peak = Math.max(peak, ++running);
+        await Promise.resolve();
+        running--;
+        return 'texte';
+      },
+    };
+    const { service } = await build({ llm });
+
+    await service.generate('e1', 'u1');
+
+    expect(peak).toBe(1);
+  });
 });

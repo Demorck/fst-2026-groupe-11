@@ -61,7 +61,7 @@ describe('CommunicationGenerator', () => {
     );
     const { user } = renderGenerator();
     await generate(user);
-    await screen.findByLabelText('Description');
+    await user.type(await screen.findByLabelText('Description'), ' Modifié');
 
     await user.click(screen.getByRole('button', { name: 'Régénérer' }));
     const dialog = screen.getByRole('alertdialog', {
@@ -73,6 +73,21 @@ describe('CommunicationGenerator', () => {
     expect(screen.getByLabelText('Post réseau social')).toHaveValue(
       'Autre post',
     );
+  });
+
+  it('regenerates without asking when the drafts were not edited', async () => {
+    stubFetch(
+      json(drafts),
+      json({ description: 'Autre texte', post: 'Autre post' }),
+    );
+    const { user } = renderGenerator();
+    await generate(user);
+    await screen.findByLabelText('Description');
+
+    await user.click(screen.getByRole('button', { name: 'Régénérer' }));
+
+    expect(await screen.findByDisplayValue('Autre texte')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
   it('keeps the edited drafts when regenerating is cancelled', async () => {
@@ -150,6 +165,21 @@ describe('CommunicationGenerator', () => {
     await user.click(screen.getByRole('button', { name: 'Copier le post' }));
 
     expect(await navigator.clipboard.readText()).toBe(drafts.post);
+  });
+
+  it('shows an error when the clipboard is not available', async () => {
+    stubFetch(json(drafts));
+    const { user } = renderGenerator();
+    await generate(user);
+    await screen.findByLabelText('Post réseau social');
+    vi.stubGlobal('navigator', { clipboard: undefined });
+
+    await user.click(screen.getByRole('button', { name: 'Copier le post' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Copie impossible',
+    );
+    vi.unstubAllGlobals();
   });
 
   it('explains in French that the AI did not answer, and lets retry', async () => {

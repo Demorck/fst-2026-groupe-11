@@ -5,6 +5,8 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module.js';
 import { Role } from '../src/generated/prisma/enums.js';
+import { LLM_PROVIDER } from '../src/modules/ai/communication/llm-provider.interface.js';
+import { MockLlmProvider } from '../src/modules/ai/communication/mock-llm.provider.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 
 const EVENT_ID = '11111111-1111-4111-8111-111111111111';
@@ -29,7 +31,7 @@ describe('AI (e2e)', () => {
         },
       ]),
       count: vi.fn(),
-      findUniqueOrThrow: vi.fn(),
+      findUnique: vi.fn(),
     },
     // canManageEvent counts the organizations of the event the user manages
     eventOrganization: { count: vi.fn() },
@@ -41,6 +43,9 @@ describe('AI (e2e)', () => {
     })
       .overrideProvider(PrismaService)
       .useValue(prisma)
+      // Whatever LLM_PROVIDER says in the local backend/.env: tests never reach the network
+      .overrideProvider(LLM_PROVIDER)
+      .useValue(new MockLlmProvider())
       .compile();
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api');
@@ -105,7 +110,7 @@ describe('AI (e2e)', () => {
         .send(body);
 
     beforeEach(() => {
-      prisma.event.findUniqueOrThrow.mockResolvedValue({
+      prisma.event.findUnique.mockResolvedValue({
         title: 'Soirée de rentrée',
         description: 'DJ et buvette',
         startsAt: new Date('2027-09-10T18:00:00Z'),
