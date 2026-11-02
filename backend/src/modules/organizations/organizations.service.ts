@@ -546,6 +546,16 @@ export class OrganizationsService {
     return count > 0;
   }
 
+  /** Throws 404 for an unknown event, 403 unless the user manages it. */
+  async assertCanManageEvent(userId: string, eventId: string) {
+    if ((await this.prisma.event.count({ where: { id: eventId } })) === 0) {
+      throw new NotFoundException('Event not found');
+    }
+    if (!(await this.canManageEvent(userId, eventId))) {
+      throw new ForbiddenException('Not a manager of this event');
+    }
+  }
+
   /** True when the user is a volunteer or a manager of at least one organization running the event. */
   async isVolunteerOfEvent(userId: string, eventId: string) {
     const count = await this.prisma.eventOrganization.count({

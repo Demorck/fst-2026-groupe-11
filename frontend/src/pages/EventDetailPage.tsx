@@ -10,6 +10,7 @@ import { EVENT_ERRORS } from '../features/events/messages.ts';
 import ConfirmButton from '../components/ConfirmButton.tsx';
 import ProgressBar from '../components/ProgressBar.tsx';
 import { alertDialog, toast } from '../components/dialogs.ts';
+import CommunicationGenerator from '../features/ai/components/CommunicationGenerator.tsx';
 import {
   CATEGORY_LABELS,
   CATEGORY_STYLES,
@@ -161,6 +162,18 @@ export default function EventDetailPage() {
               ))}
             </ul>
           </section>
+
+          {event.canManage && (
+            <CommunicationGenerator
+              eventId={event.id}
+              // The answer can come back once another event is shown: keep that one
+              onSaved={(saved) =>
+                setEvent((current) =>
+                  current?.id === saved.id ? saved : current,
+                )
+              }
+            />
+          )}
 
           {volunteerView && event.volunteers.required > 0 && (
             <section className="card space-y-3 p-5">
