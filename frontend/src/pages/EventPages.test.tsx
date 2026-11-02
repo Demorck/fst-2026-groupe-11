@@ -121,6 +121,59 @@ describe('EventsPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('filters the list by period', async () => {
+    const soon = {
+      ...event,
+      id: 'e2',
+      title: 'Tournoi',
+      startsAt: new Date(Date.now() + 2 * 86_400_000).toISOString(),
+    };
+    renderAt('/', json([event, soon]));
+    await screen.findByRole('link', { name: 'Gala' });
+
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Période' }),
+      'Cette semaine',
+    );
+
+    expect(screen.queryByRole('link', { name: 'Gala' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Tournoi' })).toBeInTheDocument();
+
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Période' }),
+      'Dans le mois',
+    );
+
+    expect(screen.getByRole('link', { name: 'Gala' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Tournoi' })).toBeInTheDocument();
+
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Période' }),
+      'Plus tard',
+    );
+
+    expect(
+      screen.getByText('Aucun événement ne correspond à votre recherche.'),
+    ).toBeInTheDocument();
+  });
+
+  it('reads the filters from the query string, and resets them', async () => {
+    renderAt('/?category=SPORT&period=week', json([event]));
+
+    expect(await screen.findByRole('radio', { name: 'Sport' })).toBeChecked();
+    expect(screen.getByRole('combobox', { name: 'Période' })).toHaveValue(
+      'week',
+    );
+    expect(screen.queryByRole('link', { name: 'Gala' })).toBeNull();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Réinitialiser les filtres' }),
+    );
+
+    expect(screen.getByRole('link', { name: 'Gala' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Toutes' })).toBeChecked();
+  });
+
   it('shows three organizations at most on a card, then how many more', async () => {
     const organizations = ['A', 'B', 'C', 'D', 'E'].map((name) => ({
       ...event.organizations[0],
