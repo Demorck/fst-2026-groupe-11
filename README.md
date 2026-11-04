@@ -202,7 +202,7 @@ Pour repartir d'une base vierge : `cd backend && npx prisma migrate reset` (dét
 https://claude.ai/artifact/HZNcp6ANdFbVzhMhKKMDzR#page-dcb81aee8d83
 
 # Diaporama
-https://claude.ai/artifact/MH9smoAFX2RPeSK176jKqr#slide-c352614a46a2
+https://claude.ai/artifact/GrgMbUHzyjEdeiXX3KPsfL#slide-e4ab6a895aad
 
 # Site
 https://gevent.isaaconnect.com
