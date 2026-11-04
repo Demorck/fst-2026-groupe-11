@@ -200,3 +200,9 @@ Pour repartir d'une base vierge : `cd backend && npx prisma migrate reset` (dét
 
 # Maquette
 https://claude.ai/artifact/HZNcp6ANdFbVzhMhKKMDzR#page-dcb81aee8d83
+
+# Diaporama
+https://claude.ai/artifact/MH9smoAFX2RPeSK176jKqr#slide-c352614a46a2
+
+# Site
+https://gevent.isaaconnect.com
