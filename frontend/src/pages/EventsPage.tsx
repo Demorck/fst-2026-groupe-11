@@ -10,6 +10,13 @@ import type {
   EventWithSeats,
 } from '../features/events/types.ts';
 
+// ?period=<key>: events starting between `from` and `to` days from now, same bounds as the groups
+const PERIODS: Record<string, { label: string; from: number; to: number }> = {
+  week: { label: 'Cette semaine', from: 0, to: 7 },
+  month: { label: 'Dans le mois', from: 0, to: 31 },
+  later: { label: 'Plus tard', from: 31, to: Infinity },
+};
+
 export default function EventsPage() {
   // ?organization=<id>: the events of one organization (link from its public page)
   const organizationId = useSearchParams()[0].get('organization') ?? undefined;
@@ -27,7 +34,19 @@ function EventsList({ organizationId }: { organizationId?: string }) {
   // A booking or a cancellation elsewhere changes the seats: read the list again
   const version = useDataVersion();
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<EventCategory | null>(null);
+  const [now] = useState(Date.now);
+  // Filters live in the URL so that a filtered list can be shared or reloaded
+  const [params, setParams] = useSearchParams();
+  const category = params.get('category') as EventCategory | null;
+  const period = PERIODS[params.get('period') ?? ''];
+  const setFilters = (filters: Record<string, string | null>) => {
+    const next = new URLSearchParams(params);
+    for (const [name, value] of Object.entries(filters)) {
+      if (value) next.set(name, value);
+      else next.delete(name);
+    }
+    setParams(next, { replace: true });
+  };
 
   useEffect(() => {
     // An older answer must not overwrite a newer one
@@ -52,6 +71,9 @@ function EventsList({ organizationId }: { organizationId?: string }) {
   const shown = events?.filter(
     (event) =>
       (!category || event.category === category) &&
+      (!period ||
+        ((Date.parse(event.startsAt) - now) / 864e5 > period.from &&
+          (Date.parse(event.startsAt) - now) / 864e5 <= period.to)) &&
       (!needle ||
         `${event.title} ${event.location}`.toLowerCase().includes(needle)),
   );
@@ -80,12 +102,27 @@ function EventsList({ organizationId }: { organizationId?: string }) {
             name="category-filter"
             legend=""
             value={category}
-            onChange={setCategory}
+            onChange={(c) => setFilters({ category: c })}
             allLabel="Toutes"
           />
-          <span className="text-sm text-muted">
-            {shown?.length} événement(s)
-          </span>
+          <div className="flex items-center gap-4">
+            <select
+              aria-label="Période"
+              value={params.get('period') ?? ''}
+              onChange={(e) => setFilters({ period: e.target.value })}
+              className="field w-auto"
+            >
+              <option value="">Toutes les dates</option>
+              {Object.entries(PERIODS).map(([value, { label }]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <span className="text-sm text-muted">
+              {shown?.length} événement(s)
+            </span>
+          </div>
         </div>
       )}
       {organizationId && (
@@ -129,7 +166,7 @@ function EventsList({ organizationId }: { organizationId?: string }) {
             className="btn btn-secondary btn-sm"
             onClick={() => {
               setQuery('');
-              setCategory(null);
+              setFilters({ category: null, period: null });
             }}
           >
             Réinitialiser les filtres
@@ -139,7 +176,7 @@ function EventsList({ organizationId }: { organizationId?: string }) {
       {shown && shown.length > 0 && (
         <EventGroups
           events={shown}
-          grouped={!category && !needle && shown.length >= 4}
+          grouped={!category && !period && !needle && shown.length >= 4}
         />
       )}
     </div>
